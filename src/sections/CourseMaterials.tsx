@@ -118,7 +118,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
-  const API_URL = `http://${window.location.hostname}:5001`;
+  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001`;
 
   const fetchMaterials = async () => {
     try {

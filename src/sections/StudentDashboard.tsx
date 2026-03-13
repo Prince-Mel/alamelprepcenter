@@ -44,7 +44,7 @@ import { QuizInterface } from './QuizInterface';
 import { cn } from '@/lib/utils';
 import type { Student } from '../App';
 
-const API_URL = `http://${window.location.hostname}:5001`;
+const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001`;
 
 interface StudentDashboardProps {
   user: Student;

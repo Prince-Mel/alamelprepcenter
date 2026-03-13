@@ -29,7 +29,7 @@ export interface Student extends User {
   courses: string[];
 }
 
-const API_URL = `http://${window.location.hostname}:5001`;
+const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001`;
 
 function DeactivatedAccountView({ user, onLogout }: { user: User, onLogout: () => void }) {
   const [creator, setCreator] = useState<any>(null);

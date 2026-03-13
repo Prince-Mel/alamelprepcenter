@@ -113,7 +113,7 @@ interface UploadedMaterial {
 
 export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser }: AdminDashboardProps) {
   const isMobile = useIsMobile();
-  const API_URL = `http://${window.location.hostname}:5001`;
+  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001`;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [courses, setCourses] = useState<Course[]>([]);

@@ -1,0 +1,48 @@
+[2026-03-11T22:05:06.454Z] Syncing database schema (ON UPDATE CASCADE)...
+[2026-03-11T22:05:06.550Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.556Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.561Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.566Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.570Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.573Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.577Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.580Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.584Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.588Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.592Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.597Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.604Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-11T22:05:06.605Z] Server is fully ready and listening on port 5000
+[2026-03-11T22:05:06.606Z] Backend API running on http://localhost:5000
+[2026-03-12T23:46:16.587Z] Syncing database schema (ON UPDATE CASCADE)...
+[2026-03-12T23:46:16.703Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.714Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.720Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.729Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.735Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.740Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.748Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.754Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.762Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.768Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.772Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.782Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.791Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:46:16.792Z] Server is fully ready and listening on port 5000
+[2026-03-12T23:46:16.794Z] Backend API running on http://localhost:5000
+[2026-03-12T23:55:56.678Z] Syncing database schema (ON UPDATE CASCADE)...
+[2026-03-12T23:55:56.740Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.745Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.749Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.757Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.760Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.764Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.768Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.775Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.781Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.789Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.792Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.796Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.806Z] Note: Access denied for user ''@'localhost' (using password: NO)
+[2026-03-12T23:55:56.807Z] Server is fully ready and listening on port 5000
+[2026-03-12T23:55:56.808Z] Backend API running on http://localhost:5000
