@@ -157,19 +157,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
       return;
     }
 
-    const processUpload = async (fileData?: string) => {
-      // Size validation
-      if (newMaterialFile) {
-        const sizeMB = newMaterialFile.size / (1024 * 1024);
-        let limit = 50; // Default for textbooks, past questions, assignments
-        if (selectedMaterial === 'videos') limit = 150;
-        
-        if (sizeMB > limit) {
-          toast.error(`File too large. Maximum size for ${selectedMaterial} is ${limit}MB`);
-          return;
-        }
-      }
-
+    const processUpload = async (fileUrl?: string) => {
       const newMaterial = {
         id: `MAT${Date.now()}`,
         course_id: course.id,
@@ -178,7 +166,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
         description: newMaterialDesc,
         file_name: newMaterialFile?.name,
         file_size: newMaterialFile ? `${(newMaterialFile.size / (1024 * 1024)).toFixed(2)} MB` : undefined,
-        url: (selectedMaterial === 'videos' && videoUploadType === 'link') ? newMaterialLink : fileData,
+        url: fileUrl || newMaterialLink,
         uploaded_by: user.id,
         approved: user.role === 'admin' || user.role === 'sub-admin' ? 1 : 0,
         assigned_student_ids: [],
@@ -186,7 +174,6 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
       };
 
       try {
-        console.log("Attempting to upload material:", { ...newMaterial, url: newMaterial.url ? "(base64 data)" : null });
         const res = await fetch(`${API_URL}/api/materials`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -194,7 +181,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
         });
 
         if (res.ok) {
-          toast.success('Material uploaded and awaiting approval.');
+          toast.success('Material uploaded successfully.');
           setShowUploadDialog(false);
           setNewMaterialTitle('');
           setNewMaterialDesc('');
@@ -202,27 +189,27 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
           setNewMaterialLink('');
           fetchMaterials();
         } else {
-          const errorData = await res.json().catch(() => ({}));
-          console.error("Upload failed with status:", res.status, errorData);
-          toast.error(`Upload failed: ${errorData.error || 'Server error'}`);
+          toast.error('Upload failed');
         }
       } catch (e) {
-        console.error("Network error during upload:", e);
-        toast.error('Network error. Check your connection or server status.');
+        toast.error('Network error');
       }
     };
 
     if (newMaterialFile && (selectedMaterial !== 'videos' || videoUploadType === 'file')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        processUpload(result);
-      };
-      reader.onerror = (e) => {
-        console.error("FileReader error:", e);
-        toast.error('Failed to read file.');
-      };
-      reader.readAsDataURL(newMaterialFile);
+      const formData = new FormData();
+      formData.append('file', newMaterialFile);
+      try {
+        const uploadRes = await fetch(`${API_URL}/api/upload`, {
+          method: 'POST',
+          body: formData
+        });
+        if (!uploadRes.ok) throw new Error('Upload Failed');
+        const uploadData = await uploadRes.json();
+        processUpload(uploadData.url);
+      } catch (err) {
+        toast.error('File upload failed');
+      }
     } else {
       processUpload();
     }
@@ -236,7 +223,9 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
     }
     
     if (item.type === 'videos' && item.url) {
-      if (item.url.startsWith('data:video')) {
+      if (item.url.includes('cloudinary.com') || item.url.startsWith('http')) {
+        window.open(item.url, '_blank');
+      } else if (item.url.startsWith('data:video')) {
         const win = window.open('', '_blank');
         if (win) {
           win.document.write(`
@@ -284,7 +273,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
       return;
     }
 
-    if (item.type === 'videos') {
+    if (item.type === 'videos' || (item.url && item.url.includes('cloudinary.com'))) {
       window.open(item.url, '_blank');
       return;
     }
@@ -404,10 +393,6 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
     }
     return false;
   });
-  
-  // Further refinement: filter based on selectedMaterial if possible.
-  // Since we don't have easy type in result, let's just show relevant ones based on basic heuristics or just all for the course.
-  // Actually, let's render the "History" only if there are results.
 
   return (
     <div className="space-y-6">
@@ -575,6 +560,11 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                             <img src={`https://img.youtube.com/vi/${item.url.split('v=')[1]?.split('&')[0]}/0.jpg`} alt="Thumbnail" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.src = 'https://via.placeholder.com/300x200?text=No+Thumbnail')} />
                           ) : item.url && item.url.includes('youtu.be') ? (
                             <img src={`https://img.youtube.com/vi/${item.url.split('/').pop()}/0.jpg`} alt="Thumbnail" className="w-full h-full object-cover" />
+                          ) : item.url && item.url.includes('cloudinary.com') && item.url.endsWith('.mp4') ? (
+                            <div className="flex flex-col items-center gap-2">
+                              <PlayCircle className="w-12 h-12 text-alamel-blue/50" />
+                              <span className="text-[10px] text-gray-400 font-bold uppercase">Cloudinary Video</span>
+                            </div>
                           ) : (
                             <div className="flex flex-col items-center gap-2">
                               <PlayCircle className="w-12 h-12 text-alamel-blue/50" />

@@ -4,8 +4,23 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import { v2 as cloudinary } from 'cloudinary';
+import multer from 'multer';
 
 dotenv.config();
+
+// Cloudinary Config
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+const storage = multer.memoryStorage();
+const upload = multer({ 
+  storage: storage,
+  limits: { fileSize: 150 * 1024 * 1024 } // 150MB limit
+});
 
 const app = express();
 app.use(cors());
@@ -262,6 +277,40 @@ app.delete('/api/enrollments/:student_id/:course_id', async (req, res) => {
     await pool.execute('DELETE FROM enrollments WHERE student_id = ? AND course_id = ?', [req.params.student_id, req.params.course_id]);
     res.json({ message: 'Unenrolled' });
   } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+// --- CLOUDINARY UPLOAD ---
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ message: 'No file uploaded' });
+
+    // Determine resource type based on file type
+    let resource_type = 'auto';
+    if (req.file.mimetype.startsWith('video/')) resource_type = 'video';
+    else if (req.file.mimetype.startsWith('image/')) resource_type = 'image';
+    else resource_type = 'raw'; // For PDFs, docs, etc.
+
+    const stream = cloudinary.uploader.upload_stream(
+      { 
+        resource_type,
+        folder: 'alamel_materials',
+        public_id: `file_${Date.now()}`
+      },
+      (error, result) => {
+        if (error) return res.status(500).json({ message: error.message });
+        res.json({
+          url: result.secure_url,
+          public_id: result.public_id,
+          file_name: req.file.originalname,
+          file_size: req.file.size
+        });
+      }
+    );
+
+    stream.end(req.file.buffer);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 });
 
 // --- MATERIALS ---

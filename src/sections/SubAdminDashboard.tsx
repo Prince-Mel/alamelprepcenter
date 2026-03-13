@@ -419,27 +419,15 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
       return;
     }
     
-    const process = async (fileData?: string) => {
-      // Size validation
-      if (uploadMethod === 'file' && adminNewMaterialFile) {
-        const sizeMB = adminNewMaterialFile.size / (1024 * 1024);
-        let limit = 50; // Default for textbooks and past questions
-        if (adminSelectedMaterialType === 'videos') limit = 150;
-        
-        if (sizeMB > limit) {
-          toast.error(`File too large. Maximum size for ${adminSelectedMaterialType} is ${limit}MB`);
-          return;
-        }
-      }
-
+    const process = async (fileUrl?: string) => {
       const mat = {
         id: `MAT${Date.now()}`,
         course_id: adminSelectedCourseId,
         type: adminSelectedMaterialType,
         title: adminNewMaterialTitle,
-        url: uploadMethod === 'link' ? adminNewMaterialLink : fileData,
+        url: fileUrl || adminNewMaterialLink,
         uploaded_by: user.name,
-        approved: true, // Sub-admin uploads are auto-approved
+        approved: true, 
         date: new Date().toISOString().split('T')[0],
         assigned_student_ids: adminSelectedStudentIds
       };
@@ -454,7 +442,6 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
           fetchData();
           setShowAdminUploadDialog(false);
           toast.success('Asset Deployed');
-          // Reset form
           setAdminNewMaterialTitle('');
           setAdminNewMaterialLink('');
           setAdminSelectedCourseId('');
@@ -470,9 +457,20 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
     };
 
     if (uploadMethod === 'file' && adminNewMaterialFile) {
-      const reader = new FileReader();
-      reader.onload = (e) => process(e.target?.result as string);
-      reader.readAsDataURL(adminNewMaterialFile);
+      const formData = new FormData();
+      formData.append('file', adminNewMaterialFile);
+
+      try {
+        const uploadRes = await fetch(`${API_URL}/api/upload`, {
+          method: 'POST',
+          body: formData
+        });
+        if (!uploadRes.ok) throw new Error('Cloudinary Upload Failed');
+        const uploadData = await uploadRes.json();
+        process(uploadData.url);
+      } catch (err) {
+        toast.error('File upload failed');
+      }
     } else {
       process();
     }
