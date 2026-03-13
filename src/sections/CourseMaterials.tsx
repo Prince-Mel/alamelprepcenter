@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -27,7 +27,8 @@ import {
   Trash2,
   CheckCircle,
   ChevronRight,
-  Sparkles
+  Sparkles,
+  Search
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -115,6 +116,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
   const userRole = user.role;
   const [uploadedMaterials, setUploadedMaterials] = useState<UploadedMaterial[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const API_URL = `http://${window.location.hostname}:5001`;
 
@@ -328,44 +330,51 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
       .catch(() => toast.error('Action failed.'));
   };
 
-  const filteredMaterials = uploadedMaterials.filter(m => {
-    if (m.type !== selectedMaterial) return false;
-  
-    const isForThisCourse = m.course_id === course.id;
-    const isGlobal = m.course_id === 'GLOBAL';
-    if (!isForThisCourse && !isGlobal) return false;
-  
-    // Admin and Sub-Admin can see everything in the course/global context
-    if (userRole === 'admin' || userRole === 'sub-admin') return true;
-  
-    // Student Visibility Logic
-    const isApproved = m.approved == 1 || m.approved === true;
-    const isMyOwnUpload = m.uploaded_by === user.id;
-  
-    if (!isApproved && !isMyOwnUpload) {
-      return false; // Hide unapproved materials that aren't mine
-    }
-  
-    // Handle materials assigned to specific students
-    let assignedIds: string[] = [];
-    try {
-      if (typeof m.assigned_student_ids === 'string' && m.assigned_student_ids.length > 2) {
-        assignedIds = JSON.parse(m.assigned_student_ids);
-      } else if (Array.isArray(m.assigned_student_ids)) {
-        assignedIds = m.assigned_student_ids;
+  const filteredMaterials = useMemo(() => {
+    return uploadedMaterials.filter(m => {
+      if (m.type !== selectedMaterial) return false;
+    
+      const isForThisCourse = m.course_id === course.id;
+      const isGlobal = m.course_id === 'GLOBAL';
+      if (!isForThisCourse && !isGlobal) return false;
+    
+      // Admin and Sub-Admin can see everything in the course/global context
+      if (userRole === 'admin' || userRole === 'sub-admin') {
+        // Apply search even for admin
+        return m.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+               (m.description || '').toLowerCase().includes(searchQuery.toLowerCase());
       }
-    } catch (e) {
-      assignedIds = [];
-    }
-  
-    // If a material has specific assignees, I must be one of them
-    if (assignedIds.length > 0 && !assignedIds.includes(user.id)) {
-      return false;
-    }
-  
-    // Show if it's approved (and I'm in the course), or it's my pending upload
-    return true;
-  });
+    
+      // Student Visibility Logic
+      const isApproved = m.approved == 1 || m.approved === true;
+      const isMyOwnUpload = m.uploaded_by === user.id;
+    
+      if (!isApproved && !isMyOwnUpload) {
+        return false; // Hide unapproved materials that aren't mine
+      }
+    
+      // Handle materials assigned to specific students
+      let assignedIds: string[] = [];
+      try {
+        if (typeof m.assigned_student_ids === 'string' && m.assigned_student_ids.length > 2) {
+          assignedIds = JSON.parse(m.assigned_student_ids);
+        } else if (Array.isArray(m.assigned_student_ids)) {
+          assignedIds = m.assigned_student_ids;
+        }
+      } catch (e) {
+        assignedIds = [];
+      }
+    
+      // If a material has specific assignees, I must be one of them
+      if (assignedIds.length > 0 && !assignedIds.includes(user.id)) {
+        return false;
+      }
+    
+      // Apply search
+      return m.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
+             (m.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+    });
+  }, [uploadedMaterials, selectedMaterial, course.id, user.id, userRole, searchQuery]);
 
   if (selectedResult) {
     return <AssessmentResultView result={selectedResult} onBack={() => setSelectedResult(null)} />;
@@ -446,7 +455,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
       ) : (
         // Selected Material Content
         <div className="space-y-6 animate-slide-in-right">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className={`w-12 h-12 bg-gradient-to-r ${materialConfig[selectedMaterial].color} rounded-xl flex items-center justify-center`}>
                 {(() => {
@@ -458,9 +467,20 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                 <h2 className="text-2xl font-bold text-alamel-darkBlue">
                   {materialConfig[selectedMaterial].title}
                 </h2>
-                <p className="text-alamel-darkGray">{course.name}</p>
+                <p className="text-alamel-darkGray text-sm">{course.name}</p>
               </div>
             </div>
+            
+            <div className="flex flex-1 max-w-md relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input 
+                placeholder={`Search ${materialConfig[selectedMaterial].title.toLowerCase()}...`} 
+                value={searchQuery} 
+                onChange={(e) => setSearchQuery(e.target.value)} 
+                className="pl-10 h-11 rounded-xl border-gray-200 bg-white/50 focus-visible:ring-blue-500 shadow-sm"
+              />
+            </div>
+
             <div className="flex gap-2">
               {(selectedMaterial === 'textbooks' || selectedMaterial === 'videos' || selectedMaterial === 'pastQuestions') && (
                 <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>

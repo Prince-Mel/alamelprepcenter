@@ -21,7 +21,8 @@ import {
   Menu, 
   ChevronRight, 
   Clock,
-  GraduationCap
+  GraduationCap,
+  Search
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -107,6 +108,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
   const [sidebarCollapsed] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [profileData, setProfileData] = useState({ name: user.name, id: user.id, password: user.password });
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<string[]>([]);
 
@@ -148,6 +150,12 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
 
   // Derived Data
   const userCourses = courses.filter(c => enrolledCourseIds.includes(c.id));
+  const filteredUserCourses = useMemo(() => {
+    return userCourses.filter(c => 
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      c.code.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [userCourses, searchQuery]);
   
   const eventsByDate = useMemo(() => {
     const events = new Map<string, CalendarEvent[]>();
@@ -383,9 +391,22 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
             )}
 
             {viewMode === 'courses' && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in font-semibold">
-                {userCourses.length > 0 ? userCourses.map(course => (
-                  <Card key={course.id} className="group overflow-hidden border-none shadow-lg rounded-3xl hover:shadow-xl transition-all cursor-pointer" onClick={() => handleCourseSelect(course)}>
+              <div className="space-y-6 animate-fade-in font-semibold">
+                <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                  <div className="relative flex-1 max-w-md w-full">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                    <Input 
+                      placeholder="Search my courses..." 
+                      value={searchQuery} 
+                      onChange={e => setSearchQuery(e.target.value)} 
+                      className="pl-12 rounded-2xl h-12 bg-white border-2 border-blue-50 focus-visible:ring-blue-500 shadow-sm" 
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredUserCourses.length > 0 ? filteredUserCourses.map(course => (
+                    <Card key={course.id} className="group overflow-hidden border-none shadow-lg rounded-3xl hover:shadow-xl transition-all cursor-pointer" onClick={() => handleCourseSelect(course)}>
                     <div className="h-32 relative">
                       <img src={course.image} alt={course.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                       
@@ -424,7 +445,8 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                   </div>
                 )}
               </div>
-            )}
+            </div>
+          )}
 
             {viewMode === 'announcements' && (
               <div className="max-w-3xl mx-auto space-y-6 animate-fade-in font-arial">
