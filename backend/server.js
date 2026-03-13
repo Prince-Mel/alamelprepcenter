@@ -217,6 +217,14 @@ app.post('/api/subadmins', async (req, res) => {
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
+app.get('/api/admins/:id', async (req, res) => {
+  try {
+    const [rows] = await pool.execute('SELECT id, name, email, contact, role FROM users WHERE id = ? AND (role = "admin" OR role = "sub-admin")', [req.params.id]);
+    if (rows.length === 0) return res.status(404).json({ message: 'Admin not found' });
+    res.json(rows[0]);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
 // --- COURSES & ENROLLMENTS ---
 app.get('/api/courses', async (req, res) => {
   try {
