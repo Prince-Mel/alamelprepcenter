@@ -14,6 +14,8 @@ import {
 import { toast } from 'sonner';
 import type { User, Student } from '../App';
 
+const API_URL = `http://${window.location.hostname}:5001`;
+
 interface LoginScreenProps {
   onLogin: (user: User | Student) => void;
 }
@@ -165,7 +167,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     };
 
     try {
-      const response = await fetch('http://localhost:5000/api/reg-requests', {
+      const response = await fetch(`${API_URL}/api/reg-requests`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(registrationData)
@@ -198,16 +200,19 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     e.preventDefault();
     setIsLoading(true);
 
+    const trimmedId = id.trim();
+    const trimmedPassword = password.trim();
+
     try {
-      const response = await fetch('http://localhost:5000/api/login', {
+      const response = await fetch(`${API_URL}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, password })
+        body: JSON.stringify({ id: trimmedId, password: trimmedPassword })
       });
 
       if (!response.ok) {
         const data = await response.json();
-        throw new Error(data.message || 'Invalid credentials');
+        throw new Error(data.message || data.error || 'Invalid credentials');
       }
 
       const userToLogin = await response.json();

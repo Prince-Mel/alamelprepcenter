@@ -10,15 +10,15 @@ interface AssessmentResultViewProps {
 
 export function AssessmentResultView({ result, onBack }: AssessmentResultViewProps) {
   const {
-    assessmentTitle,
-    courseName,
+    assessment_title,
+    course_name,
     score,
     status,
     feedback,
-    structuredQuestions,
+    structured_questions,
     answers,
-    manualMarking,
-    studentFile
+    manual_marking,
+    student_file
   } = result;
 
   return (
@@ -32,8 +32,8 @@ export function AssessmentResultView({ result, onBack }: AssessmentResultViewPro
         <CardHeader className="pb-4">
           <div className="flex justify-between items-start">
             <div>
-              <CardTitle className="text-2xl font-bold text-gray-800">{assessmentTitle}</CardTitle>
-              <p className="text-gray-500 font-medium">{courseName}</p>
+              <CardTitle className="text-2xl font-bold text-gray-800">{assessment_title}</CardTitle>
+              <p className="text-gray-500 font-medium">{course_name}</p>
             </div>
             {status === 'released' ? (
               <Badge className={`text-lg px-4 py-1 ${score >= 70 ? 'bg-green-500' : score >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}>
@@ -61,21 +61,21 @@ export function AssessmentResultView({ result, onBack }: AssessmentResultViewPro
           )}
 
           {/* Student File Submission */}
-          {studentFile && (
+          {student_file && (
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                <h4 className="font-bold text-gray-800 mb-2 flex items-center gap-2">
                  <FileText className="w-5 h-5 text-gray-500" /> Your Submission
                </h4>
                <div className="flex items-center justify-between bg-white p-3 rounded-lg border">
-                 <span className="text-sm font-medium truncate max-w-[200px]">{studentFile.name}</span>
+                 <span className="text-sm font-medium truncate max-w-[200px]">{student_file.name}</span>
                  <Button 
                    size="sm" 
                    variant="outline" 
                    className="gap-2"
                    onClick={() => {
                      const link = document.createElement('a');
-                     link.href = studentFile.url;
-                     link.download = studentFile.name;
+                     link.href = student_file.url;
+                     link.download = student_file.name;
                      document.body.appendChild(link);
                      link.click();
                      document.body.removeChild(link);
@@ -88,17 +88,17 @@ export function AssessmentResultView({ result, onBack }: AssessmentResultViewPro
           )}
 
           {/* Questions Review */}
-          {structuredQuestions && structuredQuestions.length > 0 && (
+          {structured_questions && structured_questions.length > 0 && (
             <div className="space-y-4">
               <h3 className="text-lg font-bold text-gray-800">Detailed Review</h3>
-              {structuredQuestions.map((q: any, index: number) => {
+              {structured_questions.map((q: any, index: number) => {
                 const studentAns = answers?.[index];
                 const isManual = q.type === 'written';
                 
                 // Determine correctness
                 let isCorrect = false;
                 if (status === 'released') {
-                   const manualCorrect = manualMarking?.[index];
+                   const manualCorrect = manual_marking?.[index];
                    const autoCorrect = q.type === 'objective' && studentAns === q.correctAnswer;
                    isCorrect = manualCorrect !== undefined ? manualCorrect : autoCorrect;
                 }

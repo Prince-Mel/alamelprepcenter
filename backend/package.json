@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodmon server.js"
+    "dev": "nodemon server.js"
   },
   "dependencies": {
     "express": "^4.21.1",

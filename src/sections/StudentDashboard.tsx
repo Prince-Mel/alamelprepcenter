@@ -43,6 +43,8 @@ import { QuizInterface } from './QuizInterface';
 import { cn } from '@/lib/utils';
 import type { Student } from '../App';
 
+const API_URL = `http://${window.location.hostname}:5001`;
+
 interface StudentDashboardProps {
   user: Student;
   onLogout: () => void;
@@ -61,15 +63,16 @@ interface Course {
 
 interface Assessment {
   id: string;
-  courseId: string;
+  course_id: string;
   title: string;
   type: 'quiz' | 'examination' | 'assignment';
   mode: 'objectives' | 'written' | 'integrated' | 'file_upload';
-  submissionMode: 'online' | 'file';
+  submission_mode: 'online' | 'file';
   duration: number;
-  endDate?: string;
-  structuredQuestions: any[];
-  assignedStudentIds?: string[];
+  start_date?: string;
+  end_date?: string;
+  structured_questions: any[];
+  assigned_student_ids?: string[];
 }
 
 interface CalendarEvent {
@@ -105,22 +108,31 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [profileData, setProfileData] = useState({ name: user.name, id: user.id, password: user.password });
 
+  const [enrolledCourseIds, setEnrolledCourseIds] = useState<string[]>([]);
+
   // Fetch Data from MySQL
   const fetchData = async () => {
+    console.log(`Fetching data for Student ID: ${user.id}`);
     try {
-      const [coursesRes, resultsRes, assessmentsRes, announcementsRes] = await Promise.all([
-        fetch('http://localhost:5000/api/courses'),
-        fetch(`http://localhost:5000/api/results/${user.id}`),
-        fetch('http://localhost:5000/api/assessments'),
-        fetch(`http://localhost:5000/api/announcements/${user.id}`)
+      const [coursesRes, resultsRes, assessmentsRes, announcementsRes, enrollmentRes] = await Promise.all([
+        fetch(`${API_URL}/api/courses`),
+        fetch(`${API_URL}/api/results/${user.id}`),
+        fetch(`${API_URL}/api/assessments`),
+        fetch(`${API_URL}/api/announcements/${user.id}`),
+        fetch(`${API_URL}/api/enrollments/${user.id}`)
       ]);
 
       if (coursesRes.ok) setCourses(await coursesRes.json());
       if (resultsRes.ok) setStudentResults(await resultsRes.json());
       if (assessmentsRes.ok) setAssessments(await assessmentsRes.json());
       if (announcementsRes.ok) setAnnouncements(await announcementsRes.json());
+      if (enrollmentRes.ok) {
+        const enrollments = await enrollmentRes.json();
+        console.log(`Successfully retrieved ${enrollments.length} enrollments for ${user.id}:`, enrollments);
+        setEnrolledCourseIds(enrollments.map((e: any) => e.course_id));
+      }
     } catch (error) {
-      console.error("Data fetch error:", error);
+      console.error("Critical Data Fetch Error:", error);
     } finally {
       setIsLoading(false);
     }
@@ -128,20 +140,20 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 30000);
+    const interval = setInterval(fetchData, 5000); // Poll every 5 seconds
     return () => clearInterval(interval);
   }, [user.id]);
 
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
 
   // Derived Data
-  const userCourses = courses.filter(c => user.courses?.includes(c.id));
+  const userCourses = courses.filter(c => enrolledCourseIds.includes(c.id));
   
   const eventsByDate = useMemo(() => {
     const events = new Map<string, CalendarEvent[]>();
     assessments.forEach(asmt => {
-      if (asmt.endDate && (asmt.assignedStudentIds?.includes(user.id) || !asmt.assignedStudentIds)) {
-        const date = parseISO(asmt.endDate);
+      if (asmt.end_date && (asmt.assigned_student_ids?.includes(user.id) || !asmt.assigned_student_ids)) {
+        const date = parseISO(asmt.end_date);
         const key = format(date, 'yyyy-MM-dd');
         if (!events.has(key)) events.set(key, []);
         events.get(key)?.push({ id: asmt.id, type: 'assessment', title: asmt.title, date, details: `Due: ${format(date, 'p')}` });
@@ -177,12 +189,12 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
     setSelectedMaterial(type);
     if (['quiz', 'examination', 'assignments'].includes(type)) {
       const typeKey = type === 'assignments' ? 'assignment' : type;
-      const completedIds = studentResults.map(r => r.assessmentId);
+      const completedIds = studentResults.map(r => r.assessment_id);
       const relevant = assessments.filter(a => 
-        a.courseId === selectedCourse?.id && 
+        a.course_id === selectedCourse?.id && 
         a.type === typeKey && 
         !completedIds.includes(a.id) &&
-        (!a.assignedStudentIds || a.assignedStudentIds.includes(user.id))
+        (!a.assigned_student_ids || a.assigned_student_ids.includes(user.id))
       );
       if (relevant.length > 0) {
         setFilteredAssessments(relevant);
@@ -197,18 +209,18 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
     if (!activeAssessment) return;
     const result = {
       id: `R${Date.now()}`,
-      studentId: user.id,
-      assessmentId: activeAssessment.id,
+      student_id: user.id,
+      assessment_id: activeAssessment.id,
       score: score?.percentage || 0,
-      correctAnswers: score?.correct || 0,
-      totalQuestions: score?.total || 0,
-      status: (activeAssessment.submissionMode === 'online') ? 'released' : 'pending',
+      correct_answers: score?.correct || 0,
+      total_questions: score?.total || 0,
+      status: (activeAssessment.submission_mode === 'online') ? 'released' : 'pending',
       answers,
-      studentFile: file
+      student_file: file
     };
 
     try {
-      await fetch('http://localhost:5000/api/results', {
+      await fetch(`${API_URL}/api/results`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(result)
@@ -225,7 +237,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
   const handleUpdateProfile = async () => {
     try {
       const updated = { ...user, name: profileData.name.toUpperCase(), password: profileData.password };
-      const res = await fetch(`http://localhost:5000/api/students/${user.id}`, {
+      const res = await fetch(`${API_URL}/api/students/${user.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated)
@@ -376,6 +388,21 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                   <Card key={course.id} className="group overflow-hidden border-none shadow-lg rounded-3xl hover:shadow-xl transition-all cursor-pointer" onClick={() => handleCourseSelect(course)}>
                     <div className="h-32 relative">
                       <img src={course.image} alt={course.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                      
+                      {/* Dynamic Subject Name on Placeholder */}
+                      {course.image === '/course-placeholder.svg' && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-start pt-8 px-2 z-20 pointer-events-none">
+                          <h4 className="text-[22px] font-black text-white uppercase tracking-tighter text-center leading-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                            {course.name}
+                          </h4>
+                          <div className="mt-auto mb-2 flex flex-col items-center">
+                            <p className="text-[6px] font-black text-white/90 uppercase tracking-[0.2em] italic drop-shadow-sm">
+                              Student Edition
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
                       <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
                       <div className="absolute bottom-4 left-4 text-white">
                         <p className="text-[10px] uppercase tracking-widest text-blue-200 font-semibold">{course.code}</p>
@@ -445,7 +472,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                           <h3 className="text-lg font-semibold text-gray-800 uppercase tracking-tight">{asmt.title}</h3>
                           <div className="flex gap-4 mt-2">
                             <span className="text-[10px] text-blue-600 uppercase flex items-center gap-1 font-semibold"><Clock className="w-3 h-3" /> {asmt.duration} mins</span>
-                            {asmt.endDate && <span className="text-[10px] text-red-500 uppercase flex items-center gap-1 font-semibold"><CalendarIcon className="w-3 h-3" /> Due {format(parseISO(asmt.endDate), 'MMM d, p')}</span>}
+                            {asmt.end_date && <span className="text-[10px] text-red-500 uppercase flex items-center gap-1 font-semibold"><CalendarIcon className="w-3 h-3" /> Due {format(parseISO(asmt.end_date), 'MMM d, p')}</span>}
                           </div>
                         </div>
                         <Button onClick={() => { setActiveAssessment(asmt); setViewMode('quiz'); }} className="bg-blue-600 hover:bg-blue-700 rounded-xl font-semibold text-xs uppercase tracking-widest shadow-lg px-6 h-10">Start Now</Button>

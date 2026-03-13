@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -77,29 +78,31 @@ interface Course {
 
 interface AssessmentConfig {
   id:string;
-  courseId: string;
+  course_id: string;
   type: 'quiz' | 'examination' | 'assignment';
   title: string;
   mode: 'objectives' | 'written' | 'integrated' | 'file_upload';
-  submissionMode: 'online' | 'file';
+  submission_mode: 'online' | 'file';
   duration: number;
-  endDate: string;
-  assignedStudentIds: string[];
+  end_date: string;
+  assigned_student_ids: string[];
 }
 
 interface UploadedMaterial {
   id: string;
-  courseId: string;
+  course_id: string;
   type: 'textbooks' | 'videos' | 'pastQuestions';
   title: string;
   url?: string;
-  uploadedBy: string;
+  uploaded_by: string;
   approved: boolean;
   date: string;
+  assigned_student_ids?: string[] | string;
 }
 
 export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdminDashboardProps) {
   const isMobile = useIsMobile();
+  const API_URL = `http://${window.location.hostname}:5001`;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Core Data State
@@ -139,24 +142,84 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const [studentToAssign, setStudentToAssign] = useState('');
   const [courseToAssign, setCourseToAssign] = useState('');
 
+  const [showAddCourseDialog, setShowAddCourseDialog] = useState(false);
+  const [newCourse, setNewCourse] = useState({ id: '', name: '', code: '', instructor: '', color: 'from-blue-500 to-indigo-500', image: '/course-placeholder.svg' });
+
+  const handleAddCourse = async () => {
+    if (!newCourse.id || !newCourse.name || !newCourse.code) {
+      toast.error('Required fields missing');
+      return;
+    }
+    const res = await fetch(`${API_URL}/api/courses`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newCourse)
+    });
+    if (res.ok) {
+      fetchData();
+      setShowAddCourseDialog(false);
+      setNewCourse({ id: '', name: '', code: '', instructor: '', color: 'from-blue-500 to-indigo-500', image: '/course-placeholder.svg' });
+      toast.success('Course Created');
+    }
+  };
+
+  const handleDeleteCourse = async (id: string) => {
+    if (!confirm('Are you sure? This will also remove student enrollments for this course.')) return;
+    const res = await fetch(`${API_URL}/api/courses/${id}`, { method: 'DELETE' });
+    if (res.ok) { fetchData(); toast.success('Course Deleted'); }
+  };
+
   // Material Upload
   const [adminNewMaterialTitle, setAdminNewMaterialTitle] = useState('');
   const [adminNewMaterialFile, setAdminNewMaterialFile] = useState<File | null>(null);
+  const [adminNewMaterialLink, setAdminNewMaterialLink] = useState('');
+  const [uploadMethod, setUploadMethod] = useState<'file' | 'link'>('file');
   const [adminSelectedCourseId, setAdminSelectedCourseId] = useState('');
   const [adminSelectedMaterialType, setAdminSelectedMaterialType] = useState<'textbooks' | 'videos' | 'pastQuestions'>('textbooks');
   const [adminSelectedStudentIds, setAdminSelectedStudentIds] = useState<string[]>([]);
+
+  const [newAssessmentQuestions, setNewAssessmentQuestions] = useState<any[]>([]);
+  const [globalAssessmentMode, setGlobalAssessmentMode] = useState<'objective' | 'written' | 'integrated'>('objective');
+
+  const addQuestion = () => {
+    setNewAssessmentQuestions([...newAssessmentQuestions, { 
+      id: Date.now().toString(), 
+      type: globalAssessmentMode, 
+      text: '', 
+      objectiveText: '',
+      modelAnswer: '',
+      options: ['', '', '', ''], 
+      correctAnswer: 0,
+      activeTab: 'objective'
+    }]);
+  };
+
+  const handleGlobalModeChange = (val: 'objective' | 'written' | 'integrated') => {
+    setGlobalAssessmentMode(val);
+    setNewAssessmentQuestions(newAssessmentQuestions.map(q => ({ ...q, type: val, activeTab: val === 'written' ? 'written' : 'objective' })));
+  };
+
+  const updateQuestion = (index: number, field: string, value: any) => {
+    const updated = [...newAssessmentQuestions];
+    updated[index] = { ...updated[index], [field]: value };
+    setNewAssessmentQuestions(updated);
+  };
+
+  const removeQuestion = (index: number) => {
+    setNewAssessmentQuestions(newAssessmentQuestions.filter((_, i) => i !== index));
+  };
 
   // Fetch all data from MySQL
   const fetchData = async () => {
     try {
       const [coursesRes, studentsRes, assessmentsRes, resultsRes, materialsRes, regRes, activityRes] = await Promise.all([
-        fetch('http://localhost:5000/api/courses'),
-        fetch('http://localhost:5000/api/students'),
-        fetch('http://localhost:5000/api/assessments'),
-        fetch('http://localhost:5000/api/results'),
-        fetch('http://localhost:5000/api/materials'),
-        fetch('http://localhost:5000/api/reg-requests'),
-        fetch('http://localhost:5000/api/activity')
+        fetch(`${API_URL}/api/courses`),
+        fetch(`${API_URL}/api/students`),
+        fetch(`${API_URL}/api/assessments`),
+        fetch(`${API_URL}/api/results`),
+        fetch(`${API_URL}/api/materials`),
+        fetch(`${API_URL}/api/reg-requests`),
+        fetch(`${API_URL}/api/activity`)
       ]);
 
       if (coursesRes.ok) setCourses(await coursesRes.json());
@@ -178,13 +241,20 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
           return { ...s, details };
         });
         setStudents(parsedStudents);
+
+        // Refresh selected student to update enrollment view
+        setSelectedStudent(prev => {
+          if (!prev) return null;
+          const updated = parsedStudents.find((s: any) => s.id === prev.id);
+          return updated || prev;
+        });
       }
       if (assessmentsRes.ok) setAssessments(await assessmentsRes.json());
       if (resultsRes.ok) setResults(await resultsRes.json());
       if (materialsRes.ok) setUploadedMaterials(await materialsRes.json());
       if (regRes.ok) {
         const allReqs = await regRes.json();
-        setRegRequests(allReqs.filter((r: any) => r.admin_code === user.id || r.adminCode === user.id));
+        setRegRequests(allReqs.filter((r: any) => r.admin_code === user.id));
       }
       if (activityRes.ok) {
         const allLogs = await activityRes.json();
@@ -229,7 +299,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
       created_by: user.id 
     };
     try {
-      const res = await fetch('http://localhost:5000/api/students', { 
+      const res = await fetch(`${API_URL}/api/students`, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify(student) 
@@ -253,7 +323,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
 
   const handleDeleteStudent = async () => {
     if (!selectedStudent) return;
-    const res = await fetch(`http://localhost:5000/api/students/${selectedStudent.id}`, { method: 'DELETE' });
+    const res = await fetch(`${API_URL}/api/students/${selectedStudent.id}`, { method: 'DELETE' });
     if (res.ok) { fetchData(); setShowDeleteDialog(false); toast.success('Deleted'); }
   };
 
@@ -275,14 +345,14 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
 
     try {
       const endpoint = req.role === 'student' ? '/api/students' : '/api/subadmins';
-      const res = await fetch(`http://localhost:5000${endpoint}`, {
+      const res = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData)
       });
 
       if (res.ok) {
-        await fetch(`http://localhost:5000/api/reg-requests/${req.id}`, { method: 'DELETE' });
+        await fetch(`${API_URL}/api/reg-requests/${req.id}`, { method: 'DELETE' });
         fetchData();
         toast.success(`Authorized as ${id}`);
       }
@@ -293,7 +363,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
 
   const handleRejectRequest = async (req: any) => {
     try {
-      await fetch(`http://localhost:5000/api/reg-requests/${req.id}`, { method: 'DELETE' });
+      await fetch(`${API_URL}/api/reg-requests/${req.id}`, { method: 'DELETE' });
       fetchData();
       toast.error('Unauthorized and Removed');
     } catch (e) {
@@ -302,48 +372,110 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   };
 
   const handleCreateAssessment = async () => {
-    if (!selectedCourse || !assessmentTitle || !endDate) return;
-    const config = { id: `ASMT${Date.now()}`, courseId: selectedCourse, type: 'quiz', title: assessmentTitle, mode: 'objectives', submissionMode: 'online', structuredQuestions: [], duration, startDate: new Date().toISOString(), endDate: new Date(endDate).toISOString(), assignedStudentIds: assignedStudents };
-    const res = await fetch('http://localhost:5000/api/assessments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
-    if (res.ok) { fetchData(); toast.success('Published'); }
+    if (!selectedCourse || !assessmentTitle || !endDate) {
+      toast.error('Required fields missing (Course, Title, Deadline)');
+      return;
+    }
+    const config = { 
+      id: `ASMT${Date.now()}`, 
+      course_id: selectedCourse, 
+      type: 'quiz', 
+      title: assessmentTitle, 
+      mode: 'objectives', 
+      submission_mode: 'online', 
+      structured_questions: newAssessmentQuestions, 
+      duration, 
+      start_date: new Date().toISOString(), 
+      end_date: new Date(endDate).toISOString(), 
+      assigned_student_ids: assignedStudents 
+    };
+    const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+    if (res.ok) { 
+      fetchData(); 
+      toast.success('Assessment Published with ' + newAssessmentQuestions.length + ' questions');
+      setNewAssessmentQuestions([]);
+      setAssessmentTitle('');
+    }
   };
 
   const handleAssignCourse = async () => {
     if (!studentToAssign || !courseToAssign) return;
-    const res = await fetch('http://localhost:5000/api/enrollments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId: studentToAssign, courseId: courseToAssign }) });
+    const res = await fetch(`${API_URL}/api/enrollments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ student_id: studentToAssign, course_id: courseToAssign }) });
     if (res.ok) { fetchData(); toast.success('Assigned'); }
   };
 
   const handleAdminUpload = async () => {
     if (!adminNewMaterialTitle || !adminSelectedCourseId) {
-      toast.error('Please select a course and enter a title');
+      toast.error('Title and Course selection are mandatory');
       return;
     }
+    if (uploadMethod === 'link' && !adminNewMaterialLink) {
+      toast.error('Asset Link is required');
+      return;
+    }
+
+    if (uploadMethod === 'file' && !adminNewMaterialFile) {
+      toast.error('Asset File is required');
+      return;
+    }
+    
     const process = async (fileData?: string) => {
-      const mat = { id: `MAT${Date.now()}`, courseId: adminSelectedCourseId, type: adminSelectedMaterialType, title: adminNewMaterialTitle, url: fileData, uploadedBy: user.name, approved: true, date: new Date().toISOString().split('T')[0], assignedStudentIds: adminSelectedStudentIds };
+      // Size validation
+      if (uploadMethod === 'file' && adminNewMaterialFile) {
+        const sizeMB = adminNewMaterialFile.size / (1024 * 1024);
+        let limit = 50; // Default for textbooks and past questions
+        if (adminSelectedMaterialType === 'videos') limit = 150;
+        
+        if (sizeMB > limit) {
+          toast.error(`File too large. Maximum size for ${adminSelectedMaterialType} is ${limit}MB`);
+          return;
+        }
+      }
+
+      const mat = {
+        id: `MAT${Date.now()}`,
+        course_id: adminSelectedCourseId,
+        type: adminSelectedMaterialType,
+        title: adminNewMaterialTitle,
+        url: uploadMethod === 'link' ? adminNewMaterialLink : fileData,
+        uploaded_by: user.name,
+        approved: true, // Sub-admin uploads are auto-approved
+        date: new Date().toISOString().split('T')[0],
+        assigned_student_ids: adminSelectedStudentIds
+      };
+
       try {
-        const res = await fetch('http://localhost:5000/api/materials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mat) });
-        if (res.ok) { 
-          fetchData(); 
-          setShowAdminUploadDialog(false); 
-          toast.success('Uploaded');
+        const res = await fetch(`${API_URL}/api/materials`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(mat),
+        });
+        if (res.ok) {
+          fetchData();
+          setShowAdminUploadDialog(false);
+          toast.success('Asset Deployed');
+          // Reset form
           setAdminNewMaterialTitle('');
+          setAdminNewMaterialLink('');
           setAdminSelectedCourseId('');
           setAdminSelectedStudentIds([]);
           setAdminNewMaterialFile(null);
+          setUploadMethod('file');
         } else {
-          const err = await res.json();
-          toast.error(err.error || 'Upload Failed');
+          toast.error('Deployment failed');
         }
       } catch (e) {
         toast.error('Network Error');
       }
     };
-    if (adminNewMaterialFile) {
+
+    if (uploadMethod === 'file' && adminNewMaterialFile) {
       const reader = new FileReader();
       reader.onload = (e) => process(e.target?.result as string);
       reader.readAsDataURL(adminNewMaterialFile);
-    } else process();
+    } else {
+      process();
+    }
   };
 
   const handleView = (item: UploadedMaterial) => {
@@ -405,10 +537,9 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
 
   const sidebarItems = [
     { icon: Users, label: 'Students', value: 'students' },
-    { icon: GraduationCap, label: 'Registration', value: 'reg-requests' },
-    { icon: FolderLock, label: 'SCM', value: 'scm-management' },
-    { icon: Clock, label: 'Assessments', value: 'timer' },
-    { icon: BookUser, label: 'Enrollment', value: 'course-assignment' },
+    { icon: Shield, label: 'AC Center', value: 'ac-center' },
+    { icon: FolderLock, label: 'SCM Management', value: 'scm-management' },
+    { icon: Clock, label: 'Assessment', value: 'timer' },
     { icon: CheckCircle, label: 'Results', value: 'results' },
     { icon: ActivityIcon, label: 'Activity', value: 'activity' },
     { icon: Key, label: 'ID Generator', value: 'generator' }
@@ -457,7 +588,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
         <header className="h-24 bg-white/80 backdrop-blur-xl shadow-sm px-10 flex items-center justify-between sticky top-0 z-30 border-b border-gray-100">
           <div className="flex items-center gap-6">
             {isMobile && <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(true)} className="text-gray-900"><Menu className="w-7 h-7" /></Button>}
-            <h1 className="text-xl text-gray-900 uppercase tracking-tight font-black italic border-l-4 border-blue-600 pl-4">{activeTab.replace('-', ' ')}</h1>
+            <h1 className="text-xl text-gray-900 uppercase tracking-tight font-black italic border-l-4 border-blue-600 pl-4">{activeTab === 'timer' ? 'Assessment' : activeTab.replace('-', ' ')}</h1>
           </div>
           <div className="flex items-center gap-6">
             <Button onClick={onSwitchToStudent} className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-[10px] px-8 h-12 font-black tracking-widest shadow-lg shadow-blue-200 transition-all hover:scale-105 active:scale-95">STUDENT VIEW</Button>
@@ -476,6 +607,53 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
         <div className="p-10 max-w-7xl mx-auto space-y-10 animate-fade-in">
           {activeTab === 'students' && (
             <div className="space-y-8">
+              <Card className="rounded-[32px] p-8 border-none shadow-xl bg-white">
+                <CardTitle className="text-lg uppercase tracking-tight text-gray-800 mb-8 font-semibold">Enroll Students in Courses</CardTitle>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
+                  <div className="space-y-2">
+                    <Label className="text-[10px] text-gray-400 uppercase font-semibold">Identify Student Profile</Label>
+                    <MultiSelect 
+                      options={students.map(s => ({ label: `${s.name} (${s.id})`, value: s.id }))}
+                      selected={Array.isArray(studentToAssign) ? studentToAssign : studentToAssign ? [studentToAssign] : []}
+                      onChange={(val) => setStudentToAssign(val as any)}
+                      placeholder="Select Profiles"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-[10px] text-gray-400 uppercase font-semibold">Select Subject</Label>
+                    <MultiSelect 
+                      options={courses.map(c => ({ label: c.name, value: c.id }))}
+                      selected={Array.isArray(courseToAssign) ? courseToAssign : courseToAssign ? [courseToAssign] : []}
+                      onChange={(val) => setCourseToAssign(val as any)}
+                      placeholder="Select Subjects"
+                    />
+                  </div>
+                  <Button onClick={async () => {
+                    const studentIds = Array.isArray(studentToAssign) ? studentToAssign : [studentToAssign];
+                    const course_ids = Array.isArray(courseToAssign) ? courseToAssign : [courseToAssign];
+                    if (studentIds.length === 0 || course_ids.length === 0) {
+                      toast.error('Please select at least one student and one subject');
+                      return;
+                    }
+                    let successCount = 0;
+                    for (const sId of studentIds) {
+                      for (const cId of course_ids) {
+                        const res = await fetch(`${API_URL}/api/enrollments`, { 
+                          method: 'POST', 
+                          headers: { 'Content-Type': 'application/json' }, 
+                          body: JSON.stringify({ student_id: sId, course_id: cId }) 
+                        });
+                        if (res.ok) successCount++;
+                      }
+                    }
+                    fetchData();
+                    toast.success(`Access Authorized for ${successCount} assignments`);
+                    setStudentToAssign([] as any);
+                    setCourseToAssign([] as any);
+                  }} className="h-12 bg-blue-600 text-white rounded-xl shadow-lg text-xs font-semibold uppercase tracking-widest transition-all hover:scale-105 active:scale-95">AUTHORIZE ACCESS</Button>
+                </div>
+              </Card>
+
               <div className="flex flex-col sm:flex-row justify-between items-center gap-6">
                 <div className="relative flex-1 max-w-md w-full">
                   <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -608,8 +786,8 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                       <p className="text-[9px] text-gray-400 uppercase tracking-[0.2em] mt-2 font-black">Live Performance Records</p>
                     </div>
                     <div className="flex gap-8">
-                      <div className="text-right"><p className="text-2xl font-black text-blue-600 tracking-tighter leading-none">{results.filter(r => r.studentId === selectedStudent.id).length}</p><p className="text-[9px] text-gray-400 uppercase font-black tracking-widest mt-1">SESSIONS</p></div>
-                      <div className="text-right pl-8 border-l-2 border-gray-50"><p className="text-2xl font-black text-green-600 tracking-tighter leading-none">{Math.round(results.filter(r => r.studentId === selectedStudent.id).reduce((acc, curr) => acc + curr.score, 0) / (results.filter(r => r.studentId === selectedStudent.id).length || 1))}%</p><p className="text-[9px] text-gray-400 uppercase font-black tracking-widest mt-1">AVG_SCORE</p></div>
+                      <div className="text-right"><p className="text-2xl font-black text-blue-600 tracking-tighter leading-none">{results.filter(r => r.student_id === selectedStudent.id).length}</p><p className="text-[9px] text-gray-400 uppercase font-black tracking-widest mt-1">SESSIONS</p></div>
+                      <div className="text-right pl-8 border-l-2 border-gray-50"><p className="text-2xl font-black text-green-600 tracking-tighter leading-none">{Math.round(results.filter(r => r.student_id === selectedStudent.id).reduce((acc, curr) => acc + curr.score, 0) / (results.filter(r => r.student_id === selectedStudent.id).length || 1))}%</p><p className="text-[9px] text-gray-400 uppercase font-black tracking-widest mt-1">AVG_SCORE</p></div>
                     </div>
                   </div>
                   
@@ -623,10 +801,10 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {results.filter(r => r.studentId === selectedStudent.id).length > 0 ? (
-                          results.filter(r => r.studentId === selectedStudent.id).map(r => (
+                        {results.filter(r => r.student_id === selectedStudent.id).length > 0 ? (
+                          results.filter(r => r.student_id === selectedStudent.id).map(r => (
                             <TableRow key={r.id} className="border-b border-gray-50 hover:bg-blue-50/30 transition-colors">
-                              <TableCell className="py-6"><p className="text-gray-900 uppercase text-xs font-black tracking-tight">{r.assessmentTitle}</p><p className="text-[9px] text-blue-600 font-black tracking-widest mt-1">{r.courseName}</p></TableCell>
+                              <TableCell className="py-6"><p className="text-gray-900 uppercase text-xs font-black tracking-tight">{r.assessment_title}</p><p className="text-[9px] text-blue-600 font-black tracking-widest mt-1">{r.course_name}</p></TableCell>
                               <TableCell className="text-center"><span className={`text-xl font-black tracking-tighter ${r.score >= 50 ? 'text-green-600' : 'text-red-600'}`}>{r.score}%</span></TableCell>
                               <TableCell className="text-right"><Badge className={`text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-xl shadow-lg shadow-blue-50 ${r.status === 'released' ? 'bg-green-500' : 'bg-orange-500'}`}>{r.status}</Badge></TableCell>
                             </TableRow>
@@ -654,7 +832,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                             <p className="text-[10px] text-gray-400 font-black tracking-[0.2em]">{c.code}</p>
                           </div>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => fetch(`http://localhost:5000/api/enrollments/${selectedStudent.id}/${c.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-red-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all hover:scale-110"><Trash2 className="w-5 h-5 stroke-[2.5px]" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/enrollments/${selectedStudent.id}/${c.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-red-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all hover:scale-110"><Trash2 className="w-5 h-5 stroke-[2.5px]" /></Button>
                       </div>
                     ))}
                     {courses.filter(c => selectedStudent.courses?.includes(c.id)).length === 0 && (
@@ -726,45 +904,216 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
           )}
 
           {activeTab === 'timer' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <Card className="rounded-[32px] p-8 border-none shadow-xl bg-white"><CardHeader className="p-0 mb-8"><CardTitle className="text-lg uppercase font-semibold">Publish Assessment</CardTitle></CardHeader>
-                <div className="space-y-6">
-                  <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Target Course</Label><Select value={selectedCourse} onValueChange={setSelectedCourse}><SelectTrigger className="h-12 rounded-2xl border-2 font-semibold"><SelectValue placeholder="Select Module" /></SelectTrigger><SelectContent>{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-semibold">{c.name}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Assessment Title</Label><Input value={assessmentTitle} onChange={e => setAssessmentTitle(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold" /></div>
-                  <div className="grid grid-cols-2 gap-6"><div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Deadline</Label><Input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold" /></div><div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Duration (Min)</Label><Input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} className="h-12 rounded-2xl border-2 font-semibold" /></div></div>
-                  <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Assign To</Label><MultiSelect options={studentOptions} selected={assignedStudents} onChange={setAssignedStudents} placeholder="Select students..." /></div>
-                  <Button onClick={handleCreateAssessment} className="w-full bg-blue-600 text-white h-14 rounded-2xl shadow-lg uppercase text-xs font-semibold">PUBLISH TO SYSTEM</Button>
+            <div className="space-y-8 animate-fade-in">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                {/* Left: Configuration Card */}
+                <Card className="lg:col-span-1 rounded-[32px] p-8 border-none shadow-xl bg-white h-full">
+                  <CardHeader className="p-0 mb-8">
+                    <CardTitle className="text-lg uppercase font-semibold">Assessment Configuration</CardTitle>
+                    <CardDescription className="text-[10px] uppercase text-gray-400 font-semibold">Define module test parameters</CardDescription>
+                  </CardHeader>
+                  <div className="space-y-6">
+                    <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Target Course</Label><Select value={selectedCourse} onValueChange={setSelectedCourse}><SelectTrigger className="h-12 rounded-2xl border-2 font-semibold"><SelectValue placeholder="Select Module" /></SelectTrigger><SelectContent>{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-semibold">{c.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Assessment Title</Label><Input value={assessmentTitle} onChange={e => setAssessmentTitle(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold" /></div>
+                    <div className="grid grid-cols-1 gap-6">
+                      <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Deadline</Label><Input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold" /></div>
+                      <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Duration (Min)</Label><Input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} className="h-12 rounded-2xl border-2 font-semibold" /></div>
+                    </div>
+                    <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Assign To</Label><MultiSelect options={studentOptions} selected={assignedStudents} onChange={setAssignedStudents} placeholder="Select students..." /></div>
+                    
+                    <Button onClick={handleCreateAssessment} className="w-full bg-blue-600 text-white h-14 rounded-2xl shadow-lg uppercase transition-all text-xs font-black tracking-widest italic mt-4">
+                      DEPLOY ASSESSMENT
+                    </Button>
+                  </div>
+                </Card>
+
+                {/* Right: Questions Builder Card (Replacement) */}
+                <Card className="lg:col-span-2 rounded-[32px] p-8 border-none shadow-xl bg-white h-full min-h-[600px]">
+                  <div className="flex justify-between items-center mb-8 pb-4 border-b">
+                    <div>
+                      <CardTitle className="text-lg uppercase font-semibold">Questions</CardTitle>
+                      <CardDescription className="text-[10px] uppercase text-gray-400 font-semibold">Build assessment content ({newAssessmentQuestions.length} added)</CardDescription>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Label className="text-[10px] uppercase text-gray-400 font-black">Assessment Mode:</Label>
+                      <Select value={globalAssessmentMode} onValueChange={handleGlobalModeChange}>
+                        <SelectTrigger className="h-10 w-48 rounded-2xl border-2 text-[10px] font-black uppercase tracking-widest shadow-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent className="rounded-2xl border-2">
+                          <SelectItem value="objective" className="font-bold text-[10px] uppercase">Objective (MCQ)</SelectItem>
+                          <SelectItem value="written" className="font-bold text-[10px] uppercase">Written (Essay)</SelectItem>
+                          <SelectItem value="integrated" className="font-bold text-[10px] uppercase">Integrated (Mixed)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <ScrollArea className="h-[700px] pr-4">
+                    <div className="space-y-8">
+                      {newAssessmentQuestions.map((q, idx) => (
+                        <div key={q.id} className="p-6 rounded-3xl border-2 bg-gray-50/30 space-y-6 relative group">
+                          <Button variant="ghost" size="icon" onClick={() => removeQuestion(idx)} className="absolute top-4 right-4 h-10 w-10 rounded-full bg-red-50 text-red-500 opacity-0 group-hover:opacity-100 transition-all shadow-md">
+                            <Trash2 className="w-5 h-5" />
+                          </Button>
+                          
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest bg-white px-4 py-1.5 rounded-full border shadow-sm">Question {idx + 1}</span>
+                            <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest bg-white border-2">Mode: {q.type}</Badge>
+                          </div>
+
+                          {q.type === 'integrated' && (
+                            <div className="flex bg-gray-100/50 p-1 rounded-2xl w-fit border shadow-inner">
+                              <button 
+                                onClick={() => updateQuestion(idx, 'activeTab', 'objective')}
+                                className={cn("px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", q.activeTab !== 'written' ? "bg-white text-blue-700 shadow-md" : "text-gray-400 hover:text-gray-600")}
+                              >MCQ COMPONENT</button>
+                              <button 
+                                onClick={() => updateQuestion(idx, 'activeTab', 'written')}
+                                className={cn("px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", q.activeTab === 'written' ? "bg-white text-blue-600 shadow-md" : "text-gray-400 hover:text-gray-600")}
+                              >WRITTEN COMPONENT</button>
+                            </div>
+                          )}
+
+                          {((q.type === 'written') || (q.type === 'integrated' && q.activeTab === 'written')) && (
+                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                              <Label className="text-[10px] uppercase text-gray-400 font-bold ml-1">Question Prompt (Written Part)</Label>
+                              <Textarea 
+                                value={q.text} 
+                                onChange={e => updateQuestion(idx, 'text', e.target.value)} 
+                                className="min-h-[100px] rounded-2xl border-2 font-medium text-sm resize-none p-4" 
+                                placeholder="Type the essay question or context here..."
+                              />
+                            </div>
+                          )}
+
+                          {(q.type === 'written' || (q.type === 'integrated' && q.activeTab === 'written')) && (
+                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                              <Label className="text-[10px] uppercase text-blue-600 font-black ml-1">Model Answer / Marking Guide</Label>
+                              <Textarea 
+                                value={q.modelAnswer || ''} 
+                                onChange={e => updateQuestion(idx, 'modelAnswer', e.target.value)} 
+                                className="min-h-[80px] rounded-2xl border-2 border-blue-100 bg-blue-50/20 font-medium text-xs resize-none p-4" 
+                                placeholder="Specify expected answer or keywords..."
+                              />
+                            </div>
+                          )}
+
+                          {(q.type === 'objective' || (q.type === 'integrated' && q.activeTab !== 'written')) && (
+                            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                              <div className="space-y-2">
+                                <Label className="text-[10px] uppercase text-gray-400 font-bold ml-1">{q.type === 'integrated' ? 'MCQ Specific Question' : 'Question Prompt'}</Label>
+                                <Textarea 
+                                  value={q.objectiveText || ''} 
+                                  onChange={e => updateQuestion(idx, 'objectiveText', e.target.value)} 
+                                  className="min-h-[100px] rounded-2xl border-2 font-medium text-sm resize-none p-4" 
+                                  placeholder={q.type === 'integrated' ? "Type the specific question for these options..." : "Type the full question here..."}
+                                />
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {q.options.map((opt: string, optIdx: number) => (
+                                <div key={optIdx} className="space-y-2">
+                                  <div className="flex items-center justify-between px-1">
+                                    <Label className="text-[9px] uppercase text-gray-400 font-bold">Option {String.fromCharCode(65 + optIdx)}</Label>
+                                    <div className="flex items-center gap-2">
+                                      <Label className="text-[8px] uppercase text-gray-400 font-bold">Correct?</Label>
+                                      <input 
+                                        type="radio" 
+                                        name={`sub-correct-${q.id}`} 
+                                        checked={q.correctAnswer === optIdx} 
+                                        onChange={() => updateQuestion(idx, 'correctAnswer', optIdx)}
+                                        className="w-4 h-4 text-blue-600 accent-blue-600"
+                                      />
+                                    </div>
+                                  </div>
+                                  <Textarea 
+                                    value={opt} 
+                                    onChange={e => {
+                                      const newOpts = [...q.options];
+                                      newOpts[optIdx] = e.target.value;
+                                      updateQuestion(idx, 'options', newOpts);
+                                    }} 
+                                    className={cn("min-h-[60px] rounded-2xl border-2 text-xs px-4 py-3 resize-none transition-all", q.correctAnswer === optIdx ? "border-green-500 bg-green-50/30" : "bg-white")}
+                                    placeholder={`Option ${String.fromCharCode(65 + optIdx)} content...`}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                      <div className="pt-4 flex justify-center">
+                        <Button 
+                          variant="outline" 
+                          onClick={addQuestion} 
+                          className="rounded-[20px] border-2 border-dashed border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white transition-all font-black uppercase tracking-widest px-12 h-14"
+                        >
+                          <Plus className="w-5 h-5 mr-3 stroke-[3px]" /> ADD NEW QUESTION
+                        </Button>
+                      </div>
+
+                      {newAssessmentQuestions.length === 0 && (
+                        <div className="h-[500px] border-4 border-dashed rounded-[40px] flex flex-col items-center justify-center text-gray-300 gap-4 bg-gray-50/50">
+                          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-inner"><BookUser className="w-10 h-10 opacity-20" /></div>
+                          <p className="text-sm uppercase font-black tracking-[0.3em] italic opacity-30">No questions in workspace</p>
+                          <Button onClick={addQuestion} className="bg-blue-600 text-white rounded-xl px-8 h-12 shadow-lg">START BUILDING</Button>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </Card>
+              </div>
+
+              {/* Bottom: Active Assessments Management */}
+              <Card className="rounded-[40px] p-10 border-none shadow-2xl bg-blue-600 text-white overflow-hidden relative">
+                <img src="/favicon.png" className="absolute -right-20 -bottom-20 w-80 h-80 opacity-10 rotate-12 grayscale" />
+                <div className="relative z-10">
+                  <div className="flex justify-between items-center mb-10">
+                    <div>
+                      <h3 className="text-2xl font-black italic uppercase tracking-tighter">Active System Assessments</h3>
+                      <p className="text-[10px] text-white/50 uppercase tracking-[0.2em] font-black mt-1">Live Management Console</p>
+                    </div>
+                    <Badge variant="outline" className="text-white border-white/20 px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest">{assessments.length} DEPLOYED</Badge>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {assessments.map(a => (
+                      <div key={a.id} className="p-6 rounded-[32px] bg-white/10 backdrop-blur-md border border-white/20 flex justify-between items-center group shadow-2xl transition-all hover:bg-white/15">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <Badge className="bg-white/20 text-white text-[9px] uppercase font-black px-3">{a.type}</Badge>
+                            <p className="text-[10px] text-blue-200 font-black uppercase tracking-widest">{courses.find(c => c.id === a.course_id)?.name}</p>
+                          </div>
+                          <p className="text-base font-black tracking-tight text-white line-clamp-1 mb-1">{a.title}</p>
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-1.5 text-white/40 text-[9px] font-black uppercase"><Clock className="w-3 h-3" /> {a.duration}M</div>
+                            <div className="flex items-center gap-1.5 text-white/40 text-[9px] font-black uppercase"><Users className="w-3 h-3" /> {a.assigned_student_ids?.length || 0}</div>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/assessments/${a.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all ml-4 h-12 w-12 rounded-2xl"><Trash2 className="w-6 h-6" /></Button>
+                      </div>
+                    ))}
+                    {assessments.length === 0 && (
+                      <div className="lg:col-span-3 h-40 border-2 border-dashed border-white/10 rounded-[40px] flex items-center justify-center text-white/20 uppercase text-[10px] font-black tracking-[0.3em] italic">
+                        No Active System Assessments Found
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </Card>
-              <Card className="rounded-[32px] p-8 border-none shadow-xl bg-blue-600 text-white overflow-hidden relative">
-                <img src="/favicon.png" className="absolute -right-10 -bottom-10 w-48 h-48 opacity-10 rotate-12 grayscale" /><h3 className="text-lg mb-8 relative z-10 uppercase tracking-tight font-semibold">Active Assessments</h3>
-                <ScrollArea className="h-[450px] relative z-10 pr-4"><div className="space-y-4">{assessments.map(a => (<div key={a.id} className="p-4 rounded-2xl bg-white/10 border border-white/20 flex justify-between items-center group"><div><p className="font-semibold text-sm">{a.title}</p><p className="text-[9px] uppercase font-semibold text-white/60">{courses.find(c => c.id === a.courseId)?.name}</p></div><Button variant="ghost" size="icon" onClick={() => fetch(`http://localhost:5000/api/assessments/${a.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-white/40 hover:text-red-400 transition-all"><Trash2 className="w-4 h-4" /></Button></div>))}</div></ScrollArea>
               </Card>
             </div>
           )}
 
           {activeTab === 'scm-management' && (
             <Card className="rounded-[32px] p-8 border-none shadow-xl bg-white">
-              <div className="flex justify-between items-center mb-8"><CardTitle className="text-lg uppercase tracking-tight font-semibold">SCM REPOSITORY</CardTitle><Button onClick={() => setShowAdminUploadDialog(true)} className="bg-blue-600 text-white rounded-2xl px-6 h-10 text-xs font-semibold shadow-lg"><Upload className="w-4 h-4 mr-2" /> UPLOAD NEW</Button></div>
+              <div className="flex justify-between items-center mb-8"><CardTitle className="text-lg uppercase tracking-tight font-semibold">SCM MANAGEMENT REPOSITORY</CardTitle><Button onClick={() => setShowAdminUploadDialog(true)} className="bg-blue-600 text-white rounded-2xl px-6 h-10 text-xs font-semibold shadow-lg"><Upload className="w-4 h-4 mr-2" /> UPLOAD NEW</Button></div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {uploadedMaterials.filter(m => m.uploadedBy === user.name || m.uploadedBy === user.id).map(m => (
+                {uploadedMaterials.filter(m => m.uploaded_by === user.name || m.uploaded_by === user.id).map(m => (
                   <Card key={m.id} className="rounded-3xl border shadow-lg p-6 group bg-gray-50/50">
-                    <div className="flex justify-between items-start mb-4"><div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><Files className="w-6 h-6" /></div><Button variant="ghost" size="icon" onClick={() => fetch(`http://localhost:5000/api/materials/${m.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:text-red-600"><Trash2 className="w-4 h-4" /></Button></div>
+                    <div className="flex justify-between items-start mb-4"><div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><Files className="w-6 h-6" /></div><Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/materials/${m.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:text-red-600"><Trash2 className="w-4 h-4" /></Button></div>
                     <h4 className="text-gray-800 text-base mb-1 font-semibold line-clamp-1">{m.title}</h4><p className="text-[10px] text-gray-400 uppercase mb-4 tracking-widest font-semibold">{m.type}</p>
                     <div className="flex gap-2"><Button variant="outline" className="flex-1 rounded-xl h-10 text-xs font-semibold border-2 transition-all hover:bg-blue-50" onClick={() => handleView(m)}><Eye className="w-4 h-4 mr-2" /> VIEW</Button><Button variant="outline" size="icon" className="rounded-xl h-10 w-10 border-2 transition-all" onClick={() => handleDownload(m)}><Download className="w-4 h-4" /></Button></div>
                   </Card>
                 ))}
-              </div>
-            </Card>
-          )}
-
-          {activeTab === 'course-assignment' && (
-            <Card className="rounded-[32px] p-8 border-none shadow-xl bg-white">
-              <CardTitle className="text-lg uppercase tracking-tight text-gray-800 mb-8 font-semibold">Enroll Students in Courses</CardTitle>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
-                <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Student</Label><Select value={studentToAssign} onValueChange={setStudentToAssign}><SelectTrigger className="rounded-xl h-12 border-2 font-semibold text-sm"><SelectValue placeholder="Select Student" /></SelectTrigger><SelectContent className="rounded-xl shadow-xl">{myStudents.map(s => <SelectItem key={s.id} value={s.id} className="font-semibold">{s.name} ({s.id})</SelectItem>)}</SelectContent></Select></div>
-                <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Course</Label><Select value={courseToAssign} onValueChange={setCourseToAssign}><SelectTrigger className="rounded-xl h-12 border-2 font-semibold text-sm"><SelectValue placeholder="Select Course" /></SelectTrigger><SelectContent className="rounded-xl shadow-xl">{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-semibold">{c.name}</SelectItem>)}</SelectContent></Select></div>
-                <Button onClick={handleAssignCourse} className="h-12 bg-blue-600 text-white rounded-xl shadow-lg text-xs font-semibold uppercase tracking-widest">ENROLL NOW</Button>
               </div>
             </Card>
           )}
@@ -790,10 +1139,10 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
               <Table>
                 <TableHeader><TableRow><TableHead className="px-8 text-xs font-semibold uppercase">Student Profile</TableHead><TableHead className="text-xs font-semibold uppercase">Assessment Title</TableHead><TableHead className="text-xs font-semibold uppercase">Score</TableHead><TableHead className="text-right px-8 text-xs font-semibold uppercase">Status</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {results.filter(r => myStudents.some(s => s.id === r.studentId)).map(r => (
+                  {results.filter(r => myStudents.some(s => s.id === r.student_id)).map(r => (
                     <TableRow key={r.id} className="hover:bg-gray-50 transition-colors">
-                      <TableCell className="px-8 py-6 flex items-center gap-4"><Avatar className="w-10 h-10"><AvatarFallback className="bg-blue-600 text-white font-semibold text-xs uppercase">{r.studentName[0]}</AvatarFallback></Avatar><div><p className="text-gray-800 text-sm font-semibold">{r.studentName}</p><p className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest">{r.studentId}</p></div></TableCell>
-                      <TableCell className="text-gray-500 text-sm font-semibold">{r.assessmentTitle}</TableCell>
+                      <TableCell className="px-8 py-6 flex items-center gap-4"><Avatar className="w-10 h-10"><AvatarFallback className="bg-blue-600 text-white font-semibold text-xs uppercase">{r.student_name?.[0] || 'S'}</AvatarFallback></Avatar><div><p className="text-gray-800 text-sm font-semibold">{r.student_name}</p><p className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest">{r.student_id}</p></div></TableCell>
+                      <TableCell className="text-gray-500 text-sm font-semibold">{r.assessment_title}</TableCell>
                       <TableCell><div className="flex items-center gap-3"><div className={`w-2 h-2 rounded-full ${r.score >= 50 ? 'bg-green-500' : 'bg-red-500'}`} /><span className="text-lg tracking-tight text-gray-800 font-semibold">{r.score}%</span></div></TableCell>
                       <TableCell className="text-right px-8"><Badge variant="outline" className={`px-3 py-1 rounded-full text-[8px] uppercase font-semibold ${r.status === 'released' ? 'text-green-600 border-green-200 bg-green-50' : 'text-orange-600 border-orange-200 bg-orange-50'}`}>{r.status}</Badge></TableCell>
                     </TableRow>
@@ -913,7 +1262,29 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
               </div>
             )}
             <div className="space-y-1.5"><Label className="text-[10px] uppercase text-gray-400 font-semibold ml-1">Content Title</Label><Input value={adminNewMaterialTitle} onChange={e => setAdminNewMaterialTitle(e.target.value)} className="h-12 rounded-xl border-2 font-semibold text-sm" /></div>
-            <div className="space-y-1.5"><Label className="text-[10px] uppercase text-gray-400 font-semibold ml-1">Asset File</Label><Input type="file" onChange={e => setAdminNewMaterialFile(e.target.files?.[0] || null)} className="h-12 rounded-xl border-2 font-semibold cursor-pointer file:bg-blue-50 file:text-blue-600 file:border-none file:h-full file:mr-4 px-0" /></div>
+            <div className="space-y-3">
+              <Label className="text-[10px] uppercase text-gray-400 font-semibold">Deployment Method</Label>
+              <div className="flex bg-gray-50 rounded-xl p-1 shadow-inner border-2">
+                <button 
+                  onClick={() => setUploadMethod('file')} 
+                  className={cn("flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", uploadMethod === 'file' ? "bg-white text-blue-600 shadow-sm" : "text-gray-400 hover:bg-white/50")}
+                >
+                  File Upload
+                </button>
+                <button 
+                  onClick={() => setUploadMethod('link')} 
+                  className={cn("flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", uploadMethod === 'link' ? "bg-white text-blue-600 shadow-sm" : "text-gray-400 hover:bg-white/50")}
+                >
+                  Link
+                </button>
+              </div>
+            </div>
+
+            {uploadMethod === 'file' ? (
+              <div className="space-y-1.5"><Label className="text-[10px] uppercase text-gray-400 font-semibold ml-1">Asset File</Label><Input type="file" onChange={e => setAdminNewMaterialFile(e.target.files?.[0] || null)} className="h-12 rounded-xl border-2 font-semibold cursor-pointer file:bg-blue-50 file:text-blue-600 file:border-none file:h-full file:mr-4 px-0" /></div>
+            ) : (
+              <div className="space-y-1.5"><Label className="text-[10px] uppercase text-gray-400 font-semibold ml-1">Asset Link</Label><Input value={adminNewMaterialLink} onChange={e => setAdminNewMaterialLink(e.target.value)} className="h-12 rounded-xl border-2 font-semibold text-sm" placeholder="https://..." /></div>
+            )}
           </div>
           <DialogFooter className="mt-10"><Button onClick={handleAdminUpload} className="w-full bg-blue-600 text-white h-14 rounded-2xl shadow-xl uppercase tracking-widest text-xs font-semibold">EXECUTE UPLOAD</Button></DialogFooter>
         </DialogContent>

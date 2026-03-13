@@ -17,18 +17,19 @@ export interface User {
   password: string;
   email?: string;
   contact?: string;
-  createdBy?: string;
   created_by?: string;
-  adminCode?: string;
+  admin_code?: string;
   status?: 'active' | 'inactive' | 'suspended';
   details?: any;
 }
 
 export interface Student extends User {
   status: 'active' | 'inactive' | 'suspended';
-  lastLogin?: string;
+  last_login?: string;
   courses: string[];
 }
+
+const API_URL = `http://${window.location.hostname}:5001`;
 
 function DeactivatedAccountView({ user, onLogout }: { user: User, onLogout: () => void }) {
   const [creator, setCreator] = useState<any>(null);
@@ -37,7 +38,7 @@ function DeactivatedAccountView({ user, onLogout }: { user: User, onLogout: () =
   useEffect(() => {
     const fetchCreator = async (id: string) => {
       try {
-        const res = await fetch(`http://localhost:5000/api/admins/${id}`);
+        const res = await fetch(`${API_URL}/api/admins/${id}`);
         if (!res.ok) throw new Error('Not found');
         const data = await res.json();
         setCreator(data);
@@ -51,7 +52,7 @@ function DeactivatedAccountView({ user, onLogout }: { user: User, onLogout: () =
       }
     };
 
-    const creatorId = (user as any).created_by || user.createdBy || 'ADMIN';
+    const creatorId = user.created_by || 'ADMIN';
     fetchCreator(creatorId);
   }, [user]);
 
@@ -163,7 +164,7 @@ function App() {
 
   const handleLogin = (user: Student | User) => {
     const now = new Date().toLocaleString();
-    const updatedUser = { ...user, lastLogin: now };
+    const updatedUser = { ...user, last_login: now };
     
     setCurrentUser(updatedUser);
     localStorage.setItem('alamel_user', JSON.stringify(updatedUser));

@@ -13,10 +13,9 @@ async function seed() {
 
   try {
     const courses = [
-      { id: 'CRS001', name: 'Mathematics', code: 'MATH101', instructor: 'Dr. Smith', color: 'blue', image: '' },
-      { id: 'CRS002', name: 'Physics', code: 'PHYS101', instructor: 'Dr. Jones', color: 'green', image: '' },
-      { id: 'CRS003', name: 'Chemistry', code: 'CHEM101', instructor: 'Dr. Brown', color: 'red', image: '' },
-      { id: 'CRS004', name: 'Biology', code: 'BIO101', instructor: 'Dr. White', color: 'yellow', image: '' }
+      { id: 'CRS1772824087260', name: 'English Language', code: 'ENG101', instructor: 'Admin', color: 'bg-blue-500', image: '/english-language.png' },
+      { id: 'CRS1772810500000', name: 'Mathematics', code: 'MATH101', instructor: 'Dr. Smith', color: 'bg-red-500', image: '/course-placeholder.svg' },
+      { id: 'CRS1772824129455', name: 'OWOP', code: 'OWO101', instructor: 'Admin', color: 'bg-green-500', image: '/owop.png' }
     ];
 
     console.log('Seeding courses...');

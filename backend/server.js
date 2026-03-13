@@ -2,12 +2,32 @@ import express from 'express';
 import mysql from 'mysql2/promise';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: '100mb' })); // Large limit for Base64 files
+app.use(express.json({ limit: '250mb' }));
+
+app.use((req, res, next) => {
+  logDebug(`${req.method} ${req.url}`);
+  next();
+});
+
+fs.writeFileSync(path.join(process.cwd(), 'startup.log'), `Server starting at ${new Date().toISOString()}\n`);
+const logFile = path.join(process.cwd(), 'login.log');
+function logDebug(msg) {
+  const t = new Date().toISOString();
+  const line = `[${t}] ${msg}\n`;
+  console.log(line.trim());
+  try {
+    fs.appendFileSync(logFile, line);
+  } catch (err) {
+    console.error(`Failed to write to login.log: ${err.message}`);
+  }
+}
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
@@ -16,7 +36,9 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 0
 });
 
 // --- SCHEMA UTILITY ---
@@ -37,13 +59,13 @@ async function applySchemaUpdates() {
     `ALTER TABLE materials MODIFY COLUMN url LONGTEXT;`
   ];
 
-  console.log('Syncing database schema (ON UPDATE CASCADE)...');
+  logDebug('Syncing database schema (ON UPDATE CASCADE)...');
   for (const statement of alterStatements) {
     try {
       await pool.query(statement);
     } catch (error) {
       if (error.code !== 'ER_CANT_DROP_FIELD_OR_KEY' && error.code !== 'ER_DROP_INDEX_FK') {
-         console.warn(`Note: ${error.message}`);
+         logDebug(`Note: ${error.message}`);
       }
     }
   }
@@ -53,16 +75,41 @@ async function applySchemaUpdates() {
 app.post('/api/login', async (req, res) => {
   let { id, password } = req.body;
   if (!id || !password) return res.status(400).json({ message: 'ID and password required' });
-  id = id.toUpperCase();
+  id = id.trim().toUpperCase();
+  const trimmedPassword = password.trim();
+  logDebug(`[Login Attempt] ID: "${id}", PW: "${trimmedPassword}"`);
   try {
     const [rows] = await pool.execute('SELECT * FROM users WHERE id = ?', [id]);
     const user = rows[0];
-    if (!user || user.password !== password) return res.status(401).json({ message: 'Invalid ID or password' });
+    if (!user) {
+      logDebug(`[Login Failed] User not found: "${id}"`);
+      return res.status(401).json({ message: 'Invalid ID or password' });
+    }
+    if (user.password !== trimmedPassword) {
+      logDebug(`[Login Failed] Incorrect password for: "${id}". Received: "${trimmedPassword}", Expected: "${user.password}"`);
+      return res.status(401).json({ message: 'Invalid ID or password' });
+    }
+    logDebug(`[Login Success] User logged in: "${id}"`);
     await pool.execute('UPDATE users SET last_login = NOW() WHERE id = ?', [id]);
+    await pool.execute('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)', [id, 'login', 'User logged in']);
     res.json(user);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) {
+    logDebug(`[Login Error] ${error.message}`);
+    res.status(500).json({ message: error.message });
+  }
 });
 
+app.post('/api/logout', async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) return res.status(400).json({ message: 'User ID is required' });
+  try {
+    await pool.execute('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)', [userId, 'logout', 'User logged out']);
+    res.status(200).json({ message: 'Logout successful' });
+  } catch (error) {
+    logDebug(`[Logout Error] ${error.message}`);
+    res.status(500).json({ message: 'Failed to log logout' });
+  }
+});
 // --- STUDENTS ---
 app.get('/api/students', async (req, res) => {
   try {
@@ -72,7 +119,7 @@ app.get('/api/students', async (req, res) => {
       student.courses = enrolls.map(e => e.course_id);
     }
     res.json(students);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.post('/api/students', async (req, res) => {
@@ -92,7 +139,7 @@ app.post('/api/students', async (req, res) => {
         detailsStr
       ]);
     res.status(201).json({ message: 'Created' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.put('/api/students/:id', async (req, res) => {
@@ -114,7 +161,7 @@ app.put('/api/students/:id', async (req, res) => {
     await pool.execute(query, params);
     res.json({ message: 'Updated' });
   } catch (error) { 
-    res.status(500).json({ error: error.message }); 
+    res.status(500).json({ message: error.message }); 
   }
 });
 
@@ -122,7 +169,7 @@ app.delete('/api/students/:id', async (req, res) => {
   try {
     await pool.execute('DELETE FROM users WHERE id = ?', [req.params.id]);
     res.json({ message: 'Deleted' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 // --- SUB-ADMINS ---
@@ -136,7 +183,7 @@ app.get('/api/subadmins', async (req, res) => {
       GROUP BY u.id
     `);
     res.json(subadmins);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.post('/api/subadmins', async (req, res) => {
@@ -151,7 +198,7 @@ app.post('/api/subadmins', async (req, res) => {
         contact || null
       ]);
     res.status(201).json({ message: 'Sub-Admin Created' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 // --- COURSES & ENROLLMENTS ---
@@ -159,38 +206,62 @@ app.get('/api/courses', async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT * FROM courses');
     res.json(rows);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.post('/api/courses', async (req, res) => {
   const { id, name, code, instructor, color, image } = req.body;
+  logDebug(`Creating course: ${JSON.stringify({ id, name, code })}`);
   try {
     await pool.execute('INSERT INTO courses (id, name, code, instructor, color, image) VALUES (?, ?, ?, ?, ?, ?)', 
-      [id || null, name || null, code || null, instructor || null, color || null, image || null]);
+      [id || null, name || null, code || null, instructor || null, color || null, image || '/course-placeholder.svg']);
     res.status(201).json({ message: 'Created' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { 
+    logDebug(`Course creation error: ${error.message}`);
+    res.status(500).json({ message: error.message }); 
+  }
+});
+
+app.put('/api/courses/:id', async (req, res) => {
+  const { name, code, instructor, color, image } = req.body;
+  try {
+    await pool.execute('UPDATE courses SET name = ?, code = ?, instructor = ?, color = ?, image = ? WHERE id = ?',
+      [name || null, code || null, instructor || null, color || null, image || '/course-placeholder.svg', req.params.id]);
+    res.json({ message: 'Updated' });
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.delete('/api/courses/:id', async (req, res) => {
   try {
     await pool.execute('DELETE FROM courses WHERE id = ?', [req.params.id]);
     res.json({ message: 'Deleted' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.post('/api/enrollments', async (req, res) => {
-  const { studentId, courseId } = req.body;
+  const { student_id, course_id } = req.body;
+  logDebug(`Enrolling student: ${JSON.stringify({ student_id, course_id })}`);
   try {
-    await pool.execute('INSERT IGNORE INTO enrollments (student_id, course_id) VALUES (?, ?)', [studentId || null, courseId || null]);
+    await pool.execute('INSERT IGNORE INTO enrollments (student_id, course_id) VALUES (?, ?)', [student_id || null, course_id || null]);
     res.json({ message: 'Enrolled' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { 
+    logDebug(`Enrollment error: ${error.message}`);
+    res.status(500).json({ message: error.message }); 
+  }
 });
 
-app.delete('/api/enrollments/:studentId/:courseId', async (req, res) => {
+app.get('/api/enrollments/:student_id', async (req, res) => {
   try {
-    await pool.execute('DELETE FROM enrollments WHERE student_id = ? AND course_id = ?', [req.params.studentId, req.params.courseId]);
+    const [rows] = await pool.execute('SELECT course_id FROM enrollments WHERE student_id = ?', [req.params.student_id]);
+    res.json(rows);
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.delete('/api/enrollments/:student_id/:course_id', async (req, res) => {
+  try {
+    await pool.execute('DELETE FROM enrollments WHERE student_id = ? AND course_id = ?', [req.params.student_id, req.params.course_id]);
     res.json({ message: 'Unenrolled' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 // --- MATERIALS ---
@@ -198,42 +269,87 @@ app.get('/api/materials', async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT * FROM materials');
     res.json(rows);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.post('/api/materials', async (req, res) => {
-  const { id, courseId, type, title, description, fileName, fileSize, url, uploadedBy, approved, assignedStudentIds } = req.body;
+  const { id, course_id, type, title, description, file_name, file_size, url, uploaded_by, approved, assigned_student_ids, date } = req.body;
+  logDebug(`[Materials] New upload request from ${uploaded_by} for course ${course_id}. Title: ${title}, File: ${file_name || 'N/A'} (${file_size || 'N/A'})`);
+  
+  if (url && url.length > 1000) {
+    logDebug(`[Materials] URL/File data length: ${url.length} characters`);
+  }
+
   try {
-    await pool.execute('INSERT INTO materials (id, course_id, type, title, description, file_name, file_size, url, uploaded_by, approved, assigned_student_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    await pool.execute('INSERT INTO materials (id, course_id, type, title, description, file_name, file_size, url, uploaded_by, approved, assigned_student_ids, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         id || null, 
-        courseId || null, 
+        course_id || null, 
         type || null, 
         title || null, 
         description || null, 
-        fileName || null, 
-        fileSize || 0, 
+        file_name || null, 
+        file_size || null, 
         url || null, 
-        uploadedBy || null, 
+        uploaded_by || null, 
         approved ? 1 : 0, 
-        JSON.stringify(assignedStudentIds || [])
+        JSON.stringify(assigned_student_ids || []),
+        date || new Date().toISOString().split('T')[0]
       ]);
+    logDebug(`[Materials] Successfully uploaded ${id}`);
     res.status(201).json({ message: 'Uploaded' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { 
+    logDebug(`[Materials] Error uploading ${id}: ${error.message}`);
+    res.status(500).json({ message: error.message }); 
+  }
 });
 
-app.put('/api/materials/approve/:id', async (req, res) => {
+app.put('/api/materials/:id', async (req, res) => {
+  const { id } = req.params;
+  const fields = req.body;
+  
+  // Basic validation to prevent updating arbitrary columns
+  const allowedFields = ['course_id', 'type', 'title', 'description', 'url', 'approved', 'assigned_student_ids'];
+  const fieldEntries = Object.entries(fields).filter(([key]) => allowedFields.includes(key));
+
+  if (fieldEntries.length === 0) {
+    return res.status(400).json({ message: 'No valid fields to update.' });
+  }
+
+  // Handle boolean to integer conversion for 'approved'
+  if (fields.approved !== undefined) {
+    const approvedIndex = fieldEntries.findIndex(([key]) => key === 'approved');
+    if (approvedIndex !== -1) {
+      fieldEntries[approvedIndex][1] = fields.approved ? 1 : 0;
+    }
+  }
+
+  // Handle JSON stringification
+  if (fields.assigned_student_ids !== undefined) {
+    const assignedIdsIndex = fieldEntries.findIndex(([key]) => key === 'assigned_student_ids');
+    if (assignedIdsIndex !== -1) {
+      fieldEntries[assignedIdsIndex][1] = JSON.stringify(fields.assigned_student_ids);
+    }
+  }
+
+  const setClauses = fieldEntries.map(([key]) => `${key} = ?`).join(', ');
+  const values = fieldEntries.map(([, value]) => value);
+  values.push(id);
+
   try {
-    await pool.execute('UPDATE materials SET approved = TRUE WHERE id = ?', [req.params.id]);
-    res.json({ message: 'Approved' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+    await pool.execute(`UPDATE materials SET ${setClauses} WHERE id = ?`, values);
+    res.json({ message: 'Material updated successfully' });
+  } catch (error) {
+    logDebug(`Material update error: ${error.message}`);
+    res.status(500).json({ message: error.message });
+  }
 });
 
 app.delete('/api/materials/:id', async (req, res) => {
   try {
     await pool.execute('DELETE FROM materials WHERE id = ?', [req.params.id]);
     res.json({ message: 'Deleted' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 // --- ASSESSMENTS ---
@@ -241,105 +357,119 @@ app.get('/api/assessments', async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT * FROM assessments');
     res.json(rows);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.post('/api/assessments', async (req, res) => {
-  const { id, courseId, title, type, markingType, submissionMode, mode, duration, startDate, endDate, structuredQuestions, questionFileUrl, questionFileName, assignedStudentIds } = req.body;
+  const { id, course_id, title, type, marking_type, submission_mode, mode, duration, start_date, end_date, structured_questions, question_file_url, question_file_name, assigned_student_ids } = req.body;
   try {
     await pool.execute('INSERT INTO assessments (id, course_id, title, type, marking_type, submission_mode, mode, duration, start_date, end_date, structured_questions, question_file_url, question_file_name, assigned_student_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         id || null, 
-        courseId || null, 
+        course_id || null, 
         title || null, 
         type || null, 
-        markingType || null, 
-        submissionMode || null, 
+        marking_type || null, 
+        submission_mode || null, 
         mode || null, 
         duration || 0, 
-        startDate || null, 
-        endDate || null, 
-        JSON.stringify(structuredQuestions || []), 
-        questionFileUrl || null, 
-        questionFileName || null, 
-        JSON.stringify(assignedStudentIds || [])
+        start_date || null, 
+        end_date || null, 
+        JSON.stringify(structured_questions || []), 
+        question_file_url || null, 
+        question_file_name || null, 
+        JSON.stringify(assigned_student_ids || [])
       ]);
     res.status(201).json({ message: 'Assessment Created' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.delete('/api/assessments/:id', async (req, res) => {
   try {
     await pool.execute('DELETE FROM assessments WHERE id = ?', [req.params.id]);
     res.json({ message: 'Deleted' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 // --- RESULTS ---
 app.get('/api/results', async (req, res) => {
   try {
     const [rows] = await pool.execute(`
-      SELECT r.*, a.title as assessmentTitle, a.type as assessmentType, c.name as courseName, u.name as studentName
+      SELECT r.*, a.title as assessment_title, a.type as assessment_type, c.name as course_name, u.name as student_name
       FROM results r
       JOIN assessments a ON r.assessment_id = a.id
       JOIN courses c ON a.course_id = c.id
       JOIN users u ON r.student_id = u.id
     `);
     res.json(rows);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+app.get('/api/results/:student_id', async (req, res) => {
+  try {
+    const [rows] = await pool.execute(`
+      SELECT r.*, a.title as assessment_title, a.type as assessment_type, c.name as course_name, u.name as student_name
+      FROM results r
+      JOIN assessments a ON r.assessment_id = a.id
+      JOIN courses c ON a.course_id = c.id
+      JOIN users u ON r.student_id = u.id
+      WHERE r.student_id = ?
+    `, [req.params.student_id]);
+    res.json(rows);
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.post('/api/results', async (req, res) => {
-  const { id, studentId, assessmentId, score, correctAnswers, totalQuestions, status, answers, studentFile, feedback, manualMarking } = req.body;
+  const { id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking } = req.body;
   try {
     await pool.execute('INSERT INTO results (id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         id || null, 
-        studentId || null, 
-        assessmentId || null, 
+        student_id || null, 
+        assessment_id || null, 
         score || 0, 
-        correctAnswers || 0, 
-        totalQuestions || 0, 
+        correct_answers || 0, 
+        total_questions || 0, 
         status || 'pending', 
         JSON.stringify(answers || {}), 
-        JSON.stringify(studentFile || null), 
+        JSON.stringify(student_file || null), 
         feedback || null, 
-        JSON.stringify(manualMarking || {})
+        JSON.stringify(manual_marking || {})
       ]);
     res.status(201).json({ message: 'Result Saved' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.put('/api/results/:id', async (req, res) => {
-  const { status, score, correctAnswers, feedback, manualMarking } = req.body;
+  const { status, score, correct_answers, feedback, manual_marking } = req.body;
   try {
     await pool.execute('UPDATE results SET status = ?, score = ?, correct_answers = ?, feedback = ?, manual_marking = ? WHERE id = ?',
-      [status || 'pending', score || 0, correctAnswers || 0, feedback || null, JSON.stringify(manualMarking || {}), req.params.id]);
+      [status || 'pending', score || 0, correct_answers || 0, feedback || null, JSON.stringify(manual_marking || {}), req.params.id]);
     res.json({ message: 'Result Updated' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.delete('/api/results/:id', async (req, res) => {
   try {
     await pool.execute('DELETE FROM results WHERE id = ?', [req.params.id]);
     res.json({ message: 'Deleted' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 // --- ANNOUNCEMENTS ---
-app.get('/api/announcements/:studentId', async (req, res) => {
+app.get('/api/announcements/:student_id', async (req, res) => {
   try {
-    const [rows] = await pool.execute('SELECT * FROM announcements WHERE student_id = ? ORDER BY timestamp DESC', [req.params.studentId]);
+    const [rows] = await pool.execute('SELECT * FROM announcements WHERE student_id = ? ORDER BY timestamp DESC', [req.params.student_id]);
     res.json(rows);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.post('/api/announcements', async (req, res) => {
-  const { id, studentId, message, type } = req.body;
+  const { id, student_id, message, type } = req.body;
   try {
-    await pool.execute('INSERT INTO announcements (id, student_id, message, type) VALUES (?, ?, ?, ?)', [id || null, studentId || null, message || null, type || 'general']);
+    await pool.execute('INSERT INTO announcements (id, student_id, message, type) VALUES (?, ?, ?, ?)', [id || null, student_id || null, message || null, type || 'general']);
     res.status(201).json({ message: 'Sent' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 // --- REGISTRATION REQUESTS ---
@@ -347,11 +477,11 @@ app.get('/api/reg-requests', async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT * FROM registration_requests');
     res.json(rows);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.post('/api/reg-requests', async (req, res) => {
-  const { name, phone, email, role, adminCode, details } = req.body;
+  const { name, phone, email, role, admin_code, details } = req.body;
   try {
     await pool.execute('INSERT INTO registration_requests (name, phone, email, role, admin_code, details) VALUES (?, ?, ?, ?, ?, ?)',
       [
@@ -359,13 +489,13 @@ app.post('/api/reg-requests', async (req, res) => {
         phone || null, 
         email || null, 
         role || null, 
-        adminCode || null, 
+        admin_code || null, 
         details ? JSON.stringify(details) : null
       ]);
     res.status(201).json({ message: 'Request Submitted' });
   } catch (error) { 
-    console.error('Registration Request Error:', error);
-    res.status(500).json({ error: error.message }); 
+    logDebug(`Registration Request Error: ${error.message}`);
+    res.status(500).json({ message: error.message }); 
   }
 });
 
@@ -373,7 +503,7 @@ app.delete('/api/reg-requests/:id', async (req, res) => {
   try {
     await pool.execute('DELETE FROM registration_requests WHERE id = ?', [req.params.id]);
     res.json({ message: 'Deleted' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.put('/api/reg-requests/:id', async (req, res) => {
@@ -382,27 +512,34 @@ app.put('/api/reg-requests/:id', async (req, res) => {
     await pool.execute('UPDATE registration_requests SET status = ?, approved_user_id = ? WHERE id = ?',
       [status || 'pending', approved_user_id || null, req.params.id]);
     res.json({ message: 'Updated' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 // --- ACTIVITY LOG ---
 app.get('/api/activity', async (req, res) => {
   try {
-    const [rows] = await pool.execute('SELECT * FROM activity_log ORDER BY timestamp DESC LIMIT 100');
+    const [rows] = await pool.execute(`
+      SELECT a.*, u.name as user_name, u.status as user_status 
+      FROM activity_log a 
+      LEFT JOIN users u ON a.user_id = u.id 
+      ORDER BY a.timestamp DESC 
+      LIMIT 100
+    `);
     res.json(rows);
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.post('/api/activity', async (req, res) => {
-  const { userId, action, details } = req.body;
+  const { user_id, action, details } = req.body;
   try {
-    await pool.execute('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)', [userId || null, action || null, details || null]);
+    await pool.execute('INSERT INTO activity_log (user_id, action, details) VALUES (?, ?, ?)', [user_id || null, action || null, details || null]);
     res.status(201).json({ message: 'Logged' });
-  } catch (error) { res.status(500).json({ error: error.message }); }
+  } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {
   await applySchemaUpdates();
-  console.log(`Backend API running on http://localhost:${PORT}`);
+  logDebug(`Server is fully ready and listening on port ${PORT}`);
+  logDebug(`Backend API running on http://localhost:${PORT}`);
 });

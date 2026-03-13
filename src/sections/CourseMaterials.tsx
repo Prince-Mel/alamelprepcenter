@@ -58,17 +58,17 @@ interface CourseMaterialsProps {
 
 interface UploadedMaterial {
   id: string;
-  courseId: string;
+  course_id: string;
   type: MaterialType;
   title: string;
   description?: string;
-  fileName?: string;
-  fileSize?: string;
-  url?: string; // For videos or external links
-  uploadedBy: string; // 'student' or 'admin'
-  approved: boolean;
+  file_name?: string;
+  file_size?: string;
+  url?: string;
+  uploaded_by: string;
+  approved: any; // Can be boolean or number (1/0)
   date: string;
-  assignedStudentIds?: string[];
+  assigned_student_ids?: any;
 }
 
 const materialConfig = {
@@ -116,9 +116,11 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
   const [uploadedMaterials, setUploadedMaterials] = useState<UploadedMaterial[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const API_URL = `http://${window.location.hostname}:5001`;
+
   const fetchMaterials = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/materials');
+      const res = await fetch(`${API_URL}/api/materials`);
       if (res.ok) {
         setUploadedMaterials(await res.json());
       }
@@ -131,6 +133,8 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
 
   useEffect(() => {
     fetchMaterials();
+    const interval = setInterval(fetchMaterials, 10000);
+    return () => clearInterval(interval);
   }, []);
 
   const [selectedResult, setSelectedResult] = useState<any | null>(null);
@@ -152,29 +156,43 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
     }
 
     const processUpload = async (fileData?: string) => {
+      // Size validation
+      if (newMaterialFile) {
+        const sizeMB = newMaterialFile.size / (1024 * 1024);
+        let limit = 50; // Default for textbooks, past questions, assignments
+        if (selectedMaterial === 'videos') limit = 150;
+        
+        if (sizeMB > limit) {
+          toast.error(`File too large. Maximum size for ${selectedMaterial} is ${limit}MB`);
+          return;
+        }
+      }
+
       const newMaterial = {
         id: `MAT${Date.now()}`,
-        courseId: course.id,
+        course_id: course.id,
         type: selectedMaterial,
         title: newMaterialTitle,
         description: newMaterialDesc,
-        fileName: newMaterialFile?.name,
-        fileSize: newMaterialFile ? `${(newMaterialFile.size / (1024 * 1024)).toFixed(2)} MB` : undefined,
+        file_name: newMaterialFile?.name,
+        file_size: newMaterialFile ? `${(newMaterialFile.size / (1024 * 1024)).toFixed(2)} MB` : undefined,
         url: (selectedMaterial === 'videos' && videoUploadType === 'link') ? newMaterialLink : fileData,
-        uploadedBy: user.id, // Use ID for consistency with backend
-        approved: user.role === 'admin' || user.role === 'sub-admin',
-        assignedStudentIds: [] // Default to none if uploaded from here
+        uploaded_by: user.id,
+        approved: user.role === 'admin' || user.role === 'sub-admin' ? 1 : 0,
+        assigned_student_ids: [],
+        date: new Date().toISOString().split('T')[0]
       };
 
       try {
-        const res = await fetch('http://localhost:5000/api/materials', {
+        console.log("Attempting to upload material:", { ...newMaterial, url: newMaterial.url ? "(base64 data)" : null });
+        const res = await fetch(`${API_URL}/api/materials`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newMaterial)
         });
 
         if (res.ok) {
-          toast.success('Material uploaded successfully.');
+          toast.success('Material uploaded and awaiting approval.');
           setShowUploadDialog(false);
           setNewMaterialTitle('');
           setNewMaterialDesc('');
@@ -182,10 +200,13 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
           setNewMaterialLink('');
           fetchMaterials();
         } else {
-          toast.error('Upload failed.');
+          const errorData = await res.json().catch(() => ({}));
+          console.error("Upload failed with status:", res.status, errorData);
+          toast.error(`Upload failed: ${errorData.error || 'Server error'}`);
         }
       } catch (e) {
-        toast.error('Network error.');
+        console.error("Network error during upload:", e);
+        toast.error('Network error. Check your connection or server status.');
       }
     };
 
@@ -195,6 +216,10 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
         const result = e.target?.result as string;
         processUpload(result);
       };
+      reader.onerror = (e) => {
+        console.error("FileReader error:", e);
+        toast.error('Failed to read file.');
+      };
       reader.readAsDataURL(newMaterialFile);
     } else {
       processUpload();
@@ -202,7 +227,8 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
   };
 
   const handleView = (item: UploadedMaterial) => {
-    if (userRole === 'student' && !item.approved && item.uploadedBy !== user.id) {
+    const isApproved = item.approved == 1 || item.approved === true;
+    if (userRole === 'student' && !isApproved && item.uploaded_by !== user.id) {
       toast.info('Access Restricted: This material is awaiting admin approval.');
       return;
     }
@@ -232,14 +258,11 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
         window.open(item.url, '_blank');
       }
     } else if (item.url) {
-      // For PDFs and Images, direct window.open is most reliable
       const win = window.open();
       if (win) {
-        // If it's a base64 PDF, some browsers might need an iframe or embed
         if (item.url.startsWith('data:application/pdf')) {
              win.document.write(`<iframe src="${item.url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
         } else {
-             // For images or other types, just navigate
              win.location.href = item.url;
         }
       }
@@ -249,7 +272,8 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
   };
 
   const handleDownload = (item: UploadedMaterial) => {
-    if (userRole === 'student' && !item.approved) {
+    const isApproved = item.approved == 1 || item.approved === true;
+    if (userRole === 'student' && !isApproved && item.uploaded_by !== user.id) {
       toast.info('Download Restricted: This material is awaiting admin approval.');
       return;
     }
@@ -265,7 +289,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
 
     const link = document.createElement('a');
     link.href = item.url!;
-    link.download = item.fileName || `${item.title}.pdf`;
+    link.download = (item as any).file_name || `${item.title}.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -274,69 +298,72 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
 
   const handleApprove = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/materials/approve/${id}`, { method: 'PUT' });
+      const res = await fetch(`${API_URL}/api/materials/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved: true })
+      });
       if (res.ok) {
         toast.success('Material approved.');
         fetchMaterials();
+      } else {
+        toast.error('Approval failed.');
       }
     } catch (e) {
       toast.error('Action failed.');
     }
   };
 
-  const handleDelete = async (id: string) => {
-    try {
-      const res = await fetch(`http://localhost:5000/api/materials/${id}`, { method: 'DELETE' });
-      if (res.ok) {
-        toast.success('Material deleted.');
-        fetchMaterials();
-      }
-    } catch (e) {
-      toast.error('Action failed.');
-    }
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); // Prevent handleView from triggering
+    if (!confirm('Are you sure you want to delete this material?')) return;
+    
+    fetch(`${API_URL}/api/materials/${id}`, { method: 'DELETE' })
+      .then(res => {
+        if (res.ok) {
+          toast.success('Material deleted.');
+          fetchMaterials();
+        }
+      })
+      .catch(() => toast.error('Action failed.'));
   };
 
   const filteredMaterials = uploadedMaterials.filter(m => {
-    // 1. Must match selected material type
     if (m.type !== selectedMaterial) return false;
-
-    // 2. Filter by Course Context
-    const isForThisCourse = m.courseId === course.id;
-    const isGlobal = m.courseId === 'GLOBAL';
-    
+  
+    const isForThisCourse = m.course_id === course.id;
+    const isGlobal = m.course_id === 'GLOBAL';
     if (!isForThisCourse && !isGlobal) return false;
-
-    // 3. Filter by Student Assignment (if Global or if logic requires)
-    // If assignedStudentIds is present and not empty, user MUST be in it (unless admin)
-    // Parse assignedStudentIds if it's a string (MySQL JSON sometimes comes as string)
+  
+    // Admin and Sub-Admin can see everything in the course/global context
+    if (userRole === 'admin' || userRole === 'sub-admin') return true;
+  
+    // Student Visibility Logic
+    const isApproved = m.approved == 1 || m.approved === true;
+    const isMyOwnUpload = m.uploaded_by === user.id;
+  
+    if (!isApproved && !isMyOwnUpload) {
+      return false; // Hide unapproved materials that aren't mine
+    }
+  
+    // Handle materials assigned to specific students
     let assignedIds: string[] = [];
     try {
-        if (typeof m.assignedStudentIds === 'string') {
-            assignedIds = JSON.parse(m.assignedStudentIds);
-        } else if (Array.isArray(m.assignedStudentIds)) {
-            assignedIds = m.assignedStudentIds;
-        }
-    } catch (e) { assignedIds = []; }
-
-    const isAssignedToMe = assignedIds.includes(user.id);
-    const isAssignedToNobody = assignedIds.length === 0;
-
-    // Admin sees everything
-    if (userRole === 'admin' || userRole === 'sub-admin') return true;
-
-    // Student Visibility Logic:
-    // - Must be approved
-    if (!m.approved && m.uploadedBy !== user.id) return false;
-
-    // - If it has specific assignments, I must be in it
-    if (assignedIds.length > 0 && !isAssignedToMe) return false;
-
-    // - If it has NO assignments:
-    //   - If it's Global, everyone sees it? OR no one sees it? 
-    //   - Requirement: "The course selected should display students assigned to that course" -> implies targeted.
-    //   - But "Global Content" usually implies everyone.
-    //   - Let's assume: Empty assignments = Everyone in that context (Course or Global).
-    
+      if (typeof m.assigned_student_ids === 'string' && m.assigned_student_ids.length > 2) {
+        assignedIds = JSON.parse(m.assigned_student_ids);
+      } else if (Array.isArray(m.assigned_student_ids)) {
+        assignedIds = m.assigned_student_ids;
+      }
+    } catch (e) {
+      assignedIds = [];
+    }
+  
+    // If a material has specific assignees, I must be one of them
+    if (assignedIds.length > 0 && !assignedIds.includes(user.id)) {
+      return false;
+    }
+  
+    // Show if it's approved (and I'm in the course), or it's my pending upload
     return true;
   });
 
@@ -350,21 +377,21 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
 
   // Filter results for this course and material type
   const relevantResults = (results || []).filter(r => {
-    if (r.courseId !== course.id) return false;
+    if (r.course_id !== course.id) return false;
     
     // Find assessment definition
-    const assessmentDef = (assessments || []).find((a: any) => a.id === r.assessmentId);
-    const type = assessmentDef?.type || r.assessmentType;
+    const assessmentDef = (assessments || []).find((a: any) => a.id === r.assessment_id);
+    const type = assessmentDef?.type || r.assessment_type;
     
     // Check type if available, otherwise check title heuristic for legacy data
     if (selectedMaterial === 'quiz') {
-      return type === 'quiz' || (!type && r.assessmentTitle.toLowerCase().includes('quiz'));
+      return type === 'quiz' || (!type && r.assessment_title.toLowerCase().includes('quiz'));
     }
     if (selectedMaterial === 'examination') {
-      return type === 'examination' || (!type && (r.assessmentTitle.toLowerCase().includes('exam') || r.assessmentTitle.toLowerCase().includes('test')));
+      return type === 'examination' || (!type && (r.assessment_title.toLowerCase().includes('exam') || r.assessment_title.toLowerCase().includes('test')));
     }
     if (selectedMaterial === 'assignments') {
-      return type === 'assignment' || (!type && r.assessmentTitle.toLowerCase().includes('assignment'));
+      return type === 'assignment' || (!type && r.assessment_title.toLowerCase().includes('assignment'));
     }
     return false;
   });
@@ -547,7 +574,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                           <p className="text-xs text-alamel-darkGray mt-1 line-clamp-2">{item.description || 'No description'}</p>
                           <div className="flex items-center justify-between mt-3 text-xs text-gray-400">
                             <span>{item.date}</span>
-                            <span>{item.uploadedBy}</span>
+                            <span>{item.uploaded_by}</span>
                           </div>
                         </CardContent>
                       </>
@@ -562,8 +589,8 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                             <h4 className="font-bold text-alamel-darkBlue">{item.title}</h4>
                             <div className="flex items-center gap-2 text-xs text-alamel-darkGray mt-1">
                               <span>{item.description}</span>
-                              {item.fileSize && <span>• {item.fileSize}</span>}
-                              <span>• Uploaded by {item.uploadedBy}</span>
+                              {item.file_size && <span>• {item.file_size}</span>}
+                              <span>• Uploaded by {item.uploaded_by}</span>
                             </div>
                           </div>
                         </div>
@@ -576,8 +603,8 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                               <CheckCircle className="w-4 h-4 mr-1" /> Approve
                             </Button>
                           )}
-                          {(userRole === 'admin' || (!item.approved && item.uploadedBy === 'student')) && (
-                            <Button size="icon" variant="ghost" className="text-red-400 hover:text-red-600 hover:bg-red-50" onClick={() => handleDelete(item.id)}>
+                          {(userRole === 'admin' || (!item.approved && item.uploaded_by === user.id)) && (
+                            <Button size="icon" variant="ghost" className="text-red-400 hover:text-red-600 hover:bg-red-50" onClick={(e) => handleDelete(e, item.id)}>
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           )}
@@ -606,8 +633,8 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                             <CheckCircle className="w-3 h-3" />
                           </Button>
                         )}
-                        {(userRole === 'admin' || (!item.approved && item.uploadedBy === 'student')) && (
-                          <Button size="icon" className="h-6 w-6 rounded-full bg-red-500 text-white hover:bg-red-600" onClick={() => handleDelete(item.id)}>
+                        {(userRole === 'admin' || (!item.approved && item.uploaded_by === user.id)) && (
+                          <Button size="icon" className="h-6 w-6 rounded-full bg-red-500 text-white hover:bg-red-600" onClick={(e) => handleDelete(e, item.id)}>
                             <Trash2 className="w-3 h-3" />
                           </Button>
                         )}
@@ -650,7 +677,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                             </Badge>
                             <span className="text-xs text-gray-400 font-medium">{result.timestamp?.split(',')[0]}</span>
                           </div>
-                          <h4 className="font-bold text-gray-800 line-clamp-1">{result.assessmentTitle}</h4>
+                          <h4 className="font-bold text-gray-800 line-clamp-1">{result.assessment_title}</h4>
                           <div className="mt-3 flex justify-between items-end">
                              {result.status === 'released' ? (
                                 <div>

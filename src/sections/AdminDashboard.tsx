@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -88,29 +89,31 @@ interface Course {
 
 interface AssessmentConfig {
   id:string;
-  courseId: string;
+  course_id: string;
   type: 'quiz' | 'examination' | 'assignment';
   title: string;
   mode: string;
-  submissionMode: string;
+  submission_mode: string;
   duration: number;
-  endDate: string;
-  assignedStudentIds: string[];
+  end_date: string;
+  assigned_student_ids: string[];
 }
 
 interface UploadedMaterial {
   id: string;
-  courseId: string;
+  course_id: string;
   type: 'textbooks' | 'videos' | 'pastQuestions';
   title: string;
   url?: string;
-  uploadedBy: string;
+  uploaded_by: string;
   approved: boolean;
   date: string;
+  assigned_student_ids?: string[];
 }
 
 export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser }: AdminDashboardProps) {
   const isMobile = useIsMobile();
+  const API_URL = `http://${window.location.hostname}:5001`;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [courses, setCourses] = useState<Course[]>([]);
@@ -147,6 +150,37 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   const [newSubAdminEmail, setNewSubAdminEmail] = useState('');
   const [newSubAdminContact, setNewSubAdminContact] = useState('');
 
+  const [newAssessmentQuestions, setNewAssessmentQuestions] = useState<any[]>([]);
+  const [globalAssessmentMode, setGlobalAssessmentMode] = useState<'objective' | 'written' | 'integrated'>('objective');
+
+  const addQuestion = () => {
+    setNewAssessmentQuestions([...newAssessmentQuestions, { 
+      id: Date.now().toString(), 
+      type: globalAssessmentMode, 
+      text: '', 
+      objectiveText: '',
+      modelAnswer: '',
+      options: ['', '', '', ''], 
+      correctAnswer: 0,
+      activeTab: 'objective'
+    }]);
+  };
+
+  const handleGlobalModeChange = (val: 'objective' | 'written' | 'integrated') => {
+    setGlobalAssessmentMode(val);
+    setNewAssessmentQuestions(newAssessmentQuestions.map(q => ({ ...q, type: val, activeTab: val === 'written' ? 'written' : 'objective' })));
+  };
+
+  const updateQuestion = (index: number, field: string, value: any) => {
+    const updated = [...newAssessmentQuestions];
+    updated[index] = { ...updated[index], [field]: value };
+    setNewAssessmentQuestions(updated);
+  };
+
+  const removeQuestion = (index: number) => {
+    setNewAssessmentQuestions(newAssessmentQuestions.filter((_, i) => i !== index));
+  };
+
   const [generatedCredentials, setGeneratedCredentials] = useState<{id: string, password: string} | null>(null);
   const [adminProfileData, setAdminProfileData] = useState({ name: user.name, id: user.id, password: user.password, email: user.email || '', contact: user.contact || '' });
 
@@ -164,6 +198,37 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
 
   const [studentToAssign, setStudentToAssign] = useState('');
   const [courseToAssign, setCourseToAssign] = useState('');
+
+  const [showAddCourseDialog, setShowAddCourseDialog] = useState(false);
+  const [selectedCourseToEdit, setSelectedCourseToEdit] = useState<Course | null>(null);
+  const [newCourse, setNewCourse] = useState({ id: '', name: '', code: '', instructor: '', color: 'from-blue-500 to-indigo-500', image: '/course-placeholder.svg' });
+
+  const handleAddCourse = async () => {
+    if (!newCourse.id || !newCourse.name || !newCourse.code) {
+      toast.error('Required fields missing');
+      return;
+    }
+    const method = selectedCourseToEdit ? 'PUT' : 'POST';
+    const url = selectedCourseToEdit ? `${API_URL}/api/courses/${selectedCourseToEdit.id}` : `${API_URL}/api/courses`;
+    
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newCourse)
+    });
+    if (res.ok) {
+      fetchData();
+      setShowAddCourseDialog(false);
+      setSelectedCourseToEdit(null);
+      setNewCourse({ id: '', name: '', code: '', instructor: '', color: 'from-blue-500 to-indigo-500', image: '/course-placeholder.svg' });
+      toast.success(selectedCourseToEdit ? 'Course Updated' : 'Course Created');
+    }
+  };
+
+  const handleDeleteCourse = async (id: string) => {
+    const res = await fetch(`${API_URL}/api/courses/${id}`, { method: 'DELETE' });
+    if (res.ok) { fetchData(); toast.success('Course Deleted'); }
+  };
 
   const [selectedResult, setSelectedResult] = useState<any>(null);
   const [showMarkDialog, setShowMarkDialog] = useState(false);
@@ -227,9 +292,27 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
     toast.success('Download started.');
   };
 
+  const handleApprove = async (id: string) => {
+    try {
+      const res = await fetch(`${API_URL}/api/materials/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ approved: true })
+      });
+      if (res.ok) {
+        toast.success('Material approved.');
+        fetchData();
+      } else {
+        toast.error('Approval failed.');
+      }
+    } catch (e) {
+      toast.error('Action failed.');
+    }
+  };
+
   const handleUpdateResult = async () => {
     if (!selectedResult) return;
-    const res = await fetch(`http://localhost:5000/api/results/${selectedResult.id}`, {
+    const res = await fetch(`${API_URL}/api/results/${selectedResult.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ score: markingScore, status: markingStatus })
@@ -240,14 +323,14 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   const fetchData = async () => {
     try {
       const [coursesRes, studentsRes, assessmentsRes, resultsRes, materialsRes, regRes, activityRes, subAdminsRes] = await Promise.all([
-        fetch('http://localhost:5000/api/courses'),
-        fetch('http://localhost:5000/api/students'),
-        fetch('http://localhost:5000/api/assessments'),
-        fetch('http://localhost:5000/api/results'),
-        fetch('http://localhost:5000/api/materials'),
-        fetch('http://localhost:5000/api/reg-requests'),
-        fetch('http://localhost:5000/api/activity'),
-        fetch('http://localhost:5000/api/subadmins')
+        fetch(`${API_URL}/api/courses`),
+        fetch(`${API_URL}/api/students`),
+        fetch(`${API_URL}/api/assessments`),
+        fetch(`${API_URL}/api/results`),
+        fetch(`${API_URL}/api/materials`),
+        fetch(`${API_URL}/api/reg-requests`),
+        fetch(`${API_URL}/api/activity`),
+        fetch(`${API_URL}/api/subadmins`)
       ]);
       if (coursesRes.ok) setCourses(await coursesRes.json());
       if (studentsRes.ok) {
@@ -279,7 +362,11 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
     finally { setIsLoading(false); }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { 
+    fetchData(); 
+    const interval = setInterval(fetchData, 10000); // Auto-refresh every 10 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   const myStudents = students.filter(s => {
     const creatorId = (s as any).created_by || '';
@@ -315,7 +402,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
       created_by: user.id 
     };
     try {
-      const res = await fetch('http://localhost:5000/api/students', { 
+      const res = await fetch(`${API_URL}/api/students`, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
         body: JSON.stringify(student) 
@@ -343,7 +430,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
       return;
     }
     try {
-      const res = await fetch('http://localhost:5000/api/subadmins', {
+      const res = await fetch(`${API_URL}/api/subadmins`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -376,7 +463,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   const handleUpdateSubAdminStatus = async (sub: any, newStatus: string) => {
     try {
       const updated = { ...sub, status: newStatus };
-      const res = await fetch(`http://localhost:5000/api/students/${sub.id}`, {
+      const res = await fetch(`${API_URL}/api/students/${sub.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated)
@@ -387,21 +474,43 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
 
   const handleEditStudent = async () => {
     if (!selectedStudent || !originalId) return;
-    const res = await fetch(`http://localhost:5000/api/students/${originalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(selectedStudent) });
+    const res = await fetch(`${API_URL}/api/students/${originalId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(selectedStudent) });
     if (res.ok) { fetchData(); setShowEditDialog(false); toast.success('Updated'); }
   };
 
   const handleDeleteStudent = async () => {
     if (!selectedStudent) return;
-    const res = await fetch(`http://localhost:5000/api/students/${selectedStudent.id}`, { method: 'DELETE' });
-    if (res.ok) { fetchData(); setShowDeleteDialog(false); toast.success('Deleted'); }
+    if (window.confirm('Are you sure you want to delete this student?')) {
+      const res = await fetch(`${API_URL}/api/students/${selectedStudent.id}`, { method: 'DELETE' });
+      if (res.ok) { fetchData(); setShowDeleteDialog(false); toast.success('Deleted'); }
+    }
   };
 
   const handleCreateAssessment = async () => {
-    if (!selectedCourse || !assessmentTitle || !endDate) return;
-    const config = { id: `ASMT${Date.now()}`, courseId: selectedCourse, type: 'quiz', title: assessmentTitle, mode: 'objectives', submissionMode: 'online', structuredQuestions: [], duration, startDate: new Date().toISOString(), endDate: new Date(endDate).toISOString(), assignedStudentIds: assignedStudents };
-    const res = await fetch('http://localhost:5000/api/assessments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
-    if (res.ok) { fetchData(); toast.success('Published'); }
+    if (!selectedCourse || !assessmentTitle || !endDate) {
+      toast.error('Required fields missing (Course, Title, Deadline)');
+      return;
+    }
+    const config = { 
+      id: `ASMT${Date.now()}`, 
+      course_id: selectedCourse, 
+      type: 'quiz', 
+      title: assessmentTitle, 
+      mode: 'objectives', 
+      submission_mode: 'online', 
+      structured_questions: newAssessmentQuestions, 
+      duration, 
+      start_date: new Date().toISOString(), 
+      end_date: new Date(endDate).toISOString(), 
+      assigned_student_ids: assignedStudents 
+    };
+    const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+    if (res.ok) { 
+      fetchData(); 
+      toast.success('Assessment Published with ' + newAssessmentQuestions.length + ' questions');
+      setNewAssessmentQuestions([]);
+      setAssessmentTitle('');
+    }
   };
 
   const handleAdminUpload = async () => {
@@ -415,9 +524,21 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
     }
 
     const process = async (fileData?: string) => {
-      const mat = { id: `MAT${Date.now()}`, courseId: adminSelectedCourseId === 'global-course' ? 'GLOBAL' : adminSelectedCourseId, type: adminSelectedMaterialType, title: adminNewMaterialTitle, url: fileData, uploadedBy: user.name, approved: true, date: new Date().toISOString().split('T')[0], assignedStudentIds: adminSelectedStudentIds };
+      // Size validation
+      if (adminNewMaterialFile) {
+        const sizeMB = adminNewMaterialFile.size / (1024 * 1024);
+        let limit = 50; // Default for documents/past questions
+        if (adminSelectedMaterialType === 'videos') limit = 150;
+        
+        if (sizeMB > limit) {
+          toast.error(`File too large. Maximum size for ${adminSelectedMaterialType} is ${limit}MB`);
+          return;
+        }
+      }
+
+      const mat = { id: `MAT${Date.now()}`, course_id: adminSelectedCourseId === 'global-course' ? 'GLOBAL' : adminSelectedCourseId, type: adminSelectedMaterialType, title: adminNewMaterialTitle, url: fileData, uploaded_by: user.name, approved: true, date: new Date().toISOString().split('T')[0], assigned_student_ids: adminSelectedStudentIds };
       try {
-        const res = await fetch('http://localhost:5000/api/materials', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mat) });
+        const res = await fetch(`${API_URL}/api/materials`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mat) });
         if (res.ok) { 
           fetchData(); 
           setShowAdminUploadDialog(false); 
@@ -443,7 +564,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
 
   const handleAssignCourse = async () => {
     if (!studentToAssign || !courseToAssign) return;
-    const res = await fetch('http://localhost:5000/api/enrollments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ studentId: studentToAssign, courseId: courseToAssign }) });
+    const res = await fetch(`${API_URL}/api/enrollments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ student_id: studentToAssign, course_id: courseToAssign }) });
     if (res.ok) { fetchData(); toast.success('Assigned'); }
   };
 
@@ -465,14 +586,14 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
 
     try {
       const endpoint = req.role === 'student' ? '/api/students' : '/api/subadmins';
-      const res = await fetch(`http://localhost:5000${endpoint}`, {
+      const res = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData)
       });
 
       if (res.ok) {
-        await fetch(`http://localhost:5000/api/reg-requests/${req.id}`, { method: 'DELETE' });
+        await fetch(`${API_URL}/api/reg-requests/${req.id}`, { method: 'DELETE' });
         fetchData();
         toast.success(`Authorized as ${id}`);
       }
@@ -483,7 +604,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
 
   const handleRejectRequest = async (req: any) => {
     try {
-      await fetch(`http://localhost:5000/api/reg-requests/${req.id}`, { method: 'DELETE' });
+      await fetch(`${API_URL}/api/reg-requests/${req.id}`, { method: 'DELETE' });
       fetchData();
       toast.error('Unauthorized and Removed');
     } catch (e) {
@@ -493,7 +614,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
 
   const handleUpdateAdminProfile = async () => {
     const updated = { ...user, name: adminProfileData.name.toUpperCase(), password: adminProfileData.password, email: adminProfileData.email, contact: adminProfileData.contact };
-    const res = await fetch(`http://localhost:5000/api/students/${user.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) });
+    const res = await fetch(`${API_URL}/api/students/${user.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) });
     if (res.ok) { onUpdateUser(updated, user.id); setShowAdminProfileDialog(false); toast.success('Saved'); }
   };
 
@@ -512,9 +633,9 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
           <nav className="px-3 space-y-2">
             {[
               { icon: Users, label: 'Students', value: 'students' },
-              { icon: GraduationCap, label: 'Registration', value: 'reg-requests' },
+              { icon: GraduationCap, label: 'Registration', value: 'reg-requests', badge: regRequests.length },
               { icon: Shield, label: 'AC Center', value: 'ac-center' },
-              { icon: FolderLock, label: 'SCM', value: 'scm-management' },
+              { icon: FolderLock, label: 'SCM', value: 'scm-management', badge: uploadedMaterials.filter(m => !m.approved).length },
               { icon: Clock, label: 'Assessment', value: 'timer' },
               { icon: BookUser, label: 'Enrollment', value: 'course-assignment' },
               { icon: CheckCircle, label: 'Results', value: 'results' },
@@ -523,18 +644,33 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
             ].map(item => (
               <button key={item.value} onClick={() => { setActiveTab(item.value); if(isMobile) setMobileMenuOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-all relative group ${activeTab === item.value ? 'bg-admin-aquamarine text-teal-900 shadow-xl scale-105' : 'text-white/80 hover:bg-white/10'}`}>
                 {activeTab === item.value && <div className="absolute left-0 w-1 h-6 bg-white rounded-r-full" />}
-                <item.icon className={`w-5 h-5 flex-shrink-0 ${activeTab === item.value ? 'text-teal-900' : ''}`} /> {!sidebarCollapsed && <span className="text-xs uppercase">{item.label}</span>}
+                <div className="relative">
+                  <item.icon className={`w-5 h-5 flex-shrink-0 ${activeTab === item.value ? 'text-teal-900' : ''}`} />
+                  {item.badge > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[8px] font-bold w-4 h-4 flex items-center justify-center rounded-full animate-pulse">
+                      {item.badge}
+                    </span>
+                  )}
+                </div>
+                {!sidebarCollapsed && <span className="text-xs uppercase">{item.label}</span>}
               </button>
             ))}
           </nav>
         </ScrollArea>
         {!isMobile && <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="absolute -right-3 top-24 w-6 h-6 bg-white text-admin-seaBlue rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform">{sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}</button>}
-        <div className="p-4 border-t border-white/10 bg-black/5"><button onClick={onLogout} className="w-full flex items-center gap-3 p-3 rounded-2xl text-white/80 hover:bg-red-50 transition-all group"><LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /> {!sidebarCollapsed && <span className="text-xs uppercase">Logout</span>}</button></div>
+        <div className="p-4 border-t border-white/10 bg-black/5"><button onClick={async () => {
+          await fetch(`${API_URL}/api/logout`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user.id })
+          });
+          onLogout();
+        }} className="w-full flex items-center gap-3 p-3 rounded-2xl text-red-300 hover:bg-red-600 hover:text-white transition-all group"><LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /> {!sidebarCollapsed && <span className="text-xs uppercase">Logout</span>}</button></div>
       </aside>
 
       <main className={`flex-1 transition-all duration-500 ${isMobile ? 'ml-0' : (sidebarCollapsed ? 'ml-20' : 'ml-64')}`}>
         <header className="h-20 bg-admin-seaBlue shadow-lg px-8 flex items-center justify-between border-b border-white/10 sticky top-0 z-30">
-          <div className="flex items-center gap-4">{isMobile && <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(true)} className="text-white"><Menu className="w-6 h-6" /></Button>}<h1 className="text-lg text-white uppercase tracking-tight">{activeTab.replace('-', ' ')}</h1></div>
+          <div className="flex items-center gap-4">{isMobile && <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(true)} className="text-white"><Menu className="w-6 h-6" /></Button>}<h1 className="text-lg text-white uppercase tracking-tight">{activeTab === 'timer' ? 'Assessment' : activeTab.replace('-', ' ')}</h1></div>
           <div className="flex items-center gap-4">
             <Button onClick={onSwitchToStudent} className="bg-admin-aquamarine text-teal-900 rounded-xl text-xs px-6">STUDENT VIEW</Button>
             <DropdownMenu><DropdownMenuTrigger asChild><Avatar className="cursor-pointer border-2 border-admin-aquamarine shadow-md hover:scale-105 transition-transform"><AvatarFallback className="bg-white text-admin-seaBlue uppercase text-sm">{user.name[0]}</AvatarFallback></Avatar></DropdownMenuTrigger>
@@ -597,7 +733,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                 <button onClick={() => setActiveTab('students')} className="text-admin-seaBlue uppercase text-xs tracking-widest flex items-center hover:opacity-70 transition-opacity"><ChevronLeft className="w-4 h-4 mr-2" /> Back to Students</button>
                 <div className="flex gap-3">
                   <Button onClick={() => setShowEditDialog(true)} className="bg-white text-admin-seaBlue border-2 border-admin-seaBlue/10 rounded-2xl h-10 px-6 text-xs font-semibold hover:bg-gray-50"><Settings className="w-4 h-4 mr-2" /> Edit Profile</Button>
-                  <Button onClick={() => setShowDeleteDialog(true)} className="bg-red-50 text-red-600 border-2 border-red-100 rounded-2xl h-10 px-6 text-xs font-semibold hover:bg-red-100"><Trash2 className="w-4 h-4 mr-2" /> Expel</Button>
+                  <Button onClick={handleDeleteStudent} className="bg-red-50 text-red-600 border-2 border-red-100 rounded-2xl h-10 px-6 text-xs font-semibold hover:bg-red-100"><Trash2 className="w-4 h-4 mr-2" /> Expel</Button>
                 </div>
               </div>
 
@@ -667,8 +803,8 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                       <p className="text-[9px] text-gray-400 uppercase tracking-widest mt-0.5 font-semibold">Live Assessment Records</p>
                     </div>
                     <div className="flex gap-4">
-                      <div className="text-right"><p className="text-lg text-blue-600 tracking-tight font-semibold">{results.filter(r => r.studentId === selectedStudent.id).length}</p><p className="text-[8px] text-gray-400 uppercase font-semibold">Tests</p></div>
-                      <div className="text-right pl-4 border-l-2"><p className="text-lg text-green-600 tracking-tight font-semibold">{Math.round(results.filter(r => r.studentId === selectedStudent.id).reduce((acc, curr) => acc + curr.score, 0) / (results.filter(r => r.studentId === selectedStudent.id).length || 1))}%</p><p className="text-[8px] text-gray-400 uppercase font-semibold">AVG</p></div>
+                      <div className="text-right"><p className="text-lg text-blue-600 tracking-tight font-semibold">{results.filter(r => r.student_id === selectedStudent.id).length}</p><p className="text-[8px] text-gray-400 uppercase font-semibold">Tests</p></div>
+                      <div className="text-right pl-4 border-l-2"><p className="text-lg text-green-600 tracking-tight font-semibold">{Math.round(results.filter(r => r.student_id === selectedStudent.id).reduce((acc, curr) => acc + curr.score, 0) / (results.filter(r => r.student_id === selectedStudent.id).length || 1))}%</p><p className="text-[8px] text-gray-400 uppercase font-semibold">AVG</p></div>
                     </div>
                   </div>
                   
@@ -676,10 +812,10 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                     <Table>
                       <TableHeader className="bg-gray-50/50"><TableRow><TableHead className="py-3 text-[9px] uppercase font-semibold">Title</TableHead><TableHead className="text-[9px] uppercase text-center font-semibold">Result</TableHead><TableHead className="text-[9px] uppercase text-right font-semibold">Status</TableHead></TableRow></TableHeader>
                       <TableBody>
-                        {results.filter(r => r.studentId === selectedStudent.id).length > 0 ? (
-                          results.filter(r => r.studentId === selectedStudent.id).map(r => (
+                        {results.filter(r => r.student_id === selectedStudent.id).length > 0 ? (
+                          results.filter(r => r.student_id === selectedStudent.id).map(r => (
                             <TableRow key={r.id} className="border-b hover:bg-gray-50 transition-colors">
-                              <TableCell className="py-4"><p className="text-gray-800 uppercase text-xs tracking-tight font-semibold">{r.assessmentTitle}</p><p className="text-[8px] text-gray-400 tracking-widest font-semibold">{r.courseName}</p></TableCell>
+                              <TableCell className="py-4"><p className="text-gray-800 uppercase text-xs tracking-tight font-semibold">{r.assessment_title}</p><p className="text-[8px] text-gray-400 tracking-widest font-semibold">{r.course_name}</p></TableCell>
                               <TableCell className="text-center font-semibold"><span className={`text-base tracking-tight ${r.score >= 50 ? 'text-green-600' : 'text-red-600'}`}>{r.score}%</span></TableCell>
                               <TableCell className="text-right"><Badge className={`text-[7px] uppercase font-semibold ${r.status === 'released' ? 'bg-green-500' : 'bg-orange-500'}`}>{r.status}</Badge></TableCell>
                             </TableRow>
@@ -698,18 +834,16 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                 <div className="relative z-10">
                   <h3 className="text-lg uppercase tracking-tight text-gray-800 mb-6 font-semibold">Enrolled Course Modules</h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {courses.filter(c => selectedStudent.courses?.includes(c.id)).map(c => (
-                      <div key={c.id} className="p-4 rounded-[20px] bg-gray-50 border-2 border-transparent hover:border-admin-seaBlue transition-all flex justify-between items-center group">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-white shadow-md flex items-center justify-center text-admin-seaBlue text-xs font-semibold">{c.code[0]}</div>
-                          <div>
-                            <p className="text-gray-800 uppercase tracking-tight text-xs leading-tight font-semibold">{c.name}</p>
-                            <p className="text-[8px] text-gray-400 tracking-widest mt-0.5 font-semibold">{c.code}</p>
+                      {courses.filter(c => selectedStudent.courses?.includes(c.id)).map(c => (
+                        <div key={c.id} className={cn("p-6 rounded-[24px] transition-all flex justify-between items-center group w-full text-white shadow-lg", c.color)}>
+                          <div className="flex items-center gap-4">
+                            <div>
+                              <p className="uppercase tracking-tight text-sm leading-tight font-bold">{c.name}</p>
+                            </div>
                           </div>
+                          <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/enrollments/${selectedStudent.id}/${c.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-white/50 hover:text-white opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-5 h-5" /></Button>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => fetch(`http://localhost:5000/api/enrollments/${selectedStudent.id}/${c.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-red-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-4 h-4" /></Button>
-                      </div>
-                    ))}
+                      ))}
                     {courses.filter(c => selectedStudent.courses?.includes(c.id)).length === 0 && (
                       <div className="lg:col-span-3 h-32 rounded-[24px] border-2 border-dashed flex items-center justify-center text-gray-300 uppercase text-[10px] tracking-widest font-semibold">No Modules Assigned To This Profile</div>
                     )}
@@ -846,17 +980,202 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
           )}
 
           {activeTab === 'timer' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              <Card className="rounded-[32px] p-8 border-none shadow-xl bg-white"><CardHeader className="p-0 mb-8"><CardTitle className="text-lg uppercase font-semibold">Publish Assessment</CardTitle><CardDescription className="text-[10px] uppercase text-gray-400 font-semibold">Deploy module tests to system</CardDescription></CardHeader>
-                <div className="space-y-6">
-                  <div className="space-y-2"><Label className="text-xs font-semibold">Course Target</Label><Select value={selectedCourse} onValueChange={setSelectedCourse}><SelectTrigger className="h-12 rounded-2xl border-2 font-semibold"><SelectValue placeholder="Select Module" /></SelectTrigger><SelectContent>{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-semibold">{c.name}</SelectItem>)}</SelectContent></Select></div>
-                  <div className="space-y-2"><Label className="text-xs font-semibold">Assessment Title</Label><Input value={assessmentTitle} onChange={e => setAssessmentTitle(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold" /></div>
-                  <div className="grid grid-cols-2 gap-6"><div className="space-y-2"><Label className="text-xs font-semibold">Deadline</Label><Input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold" /></div><div className="space-y-2"><Label className="text-xs font-semibold">Duration</Label><Input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} className="h-12 rounded-2xl border-2 font-semibold" /></div></div>
-                  <div className="space-y-2"><Label className="text-xs font-semibold">Target Audience</Label><MultiSelect options={studentOptions} selected={assignedStudents} onChange={setAssignedStudents} placeholder="Select students..." /></div>
-                  <Button onClick={handleCreateAssessment} className="w-full bg-admin-seaBlue text-white h-14 rounded-2xl shadow-lg uppercase transition-all text-xs font-semibold">DEPLOY ASSESSMENT</Button>
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                {/* Left: Configuration Card */}
+                <Card className="lg:col-span-1 rounded-[32px] p-8 border-none shadow-xl bg-white h-full">
+                  <CardHeader className="p-0 mb-8">
+                    <CardTitle className="text-lg uppercase font-semibold">Assessment Configuration</CardTitle>
+                    <CardDescription className="text-[10px] uppercase text-gray-400 font-semibold">Define module test parameters</CardDescription>
+                  </CardHeader>
+                  <div className="space-y-6">
+                    <div className="space-y-2"><Label className="text-xs font-semibold">Course Target</Label><Select value={selectedCourse} onValueChange={setSelectedCourse}><SelectTrigger className="h-12 rounded-2xl border-2 font-semibold"><SelectValue placeholder="Select Module" /></SelectTrigger><SelectContent>{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-semibold">{c.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label className="text-xs font-semibold">Assessment Title</Label><Input value={assessmentTitle} onChange={e => setAssessmentTitle(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold" /></div>
+                    <div className="grid grid-cols-1 gap-6">
+                      <div className="space-y-2"><Label className="text-xs font-semibold">Deadline</Label><Input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold" /></div>
+                      <div className="space-y-2"><Label className="text-xs font-semibold">Duration (Minutes)</Label><Input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} className="h-12 rounded-2xl border-2 font-semibold" /></div>
+                    </div>
+                    <div className="space-y-2"><Label className="text-xs font-semibold">Target Audience</Label><MultiSelect options={studentOptions} selected={assignedStudents} onChange={setAssignedStudents} placeholder="Select students..." /></div>
+                    
+                    <Button onClick={handleCreateAssessment} className="w-full bg-admin-seaBlue text-white h-14 rounded-2xl shadow-lg uppercase transition-all text-xs font-black tracking-widest italic mt-4">
+                      DEPLOY ASSESSMENT
+                    </Button>
+                  </div>
+                </Card>
+
+                {/* Right: Questions Builder Card (Replacement) */}
+                <Card className="lg:col-span-2 rounded-[32px] p-8 border-none shadow-xl bg-white h-full min-h-[600px]">
+                  <div className="flex justify-between items-center mb-8 pb-4 border-b">
+                    <div>
+                      <CardTitle className="text-lg uppercase font-semibold">Questions</CardTitle>
+                      <CardDescription className="text-[10px] uppercase text-gray-400 font-semibold">Build assessment content ({newAssessmentQuestions.length} added)</CardDescription>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Label className="text-[10px] uppercase text-gray-400 font-black">Assessment Mode:</Label>
+                      <Select value={globalAssessmentMode} onValueChange={handleGlobalModeChange}>
+                        <SelectTrigger className="h-10 w-48 rounded-2xl border-2 text-[10px] font-black uppercase tracking-widest shadow-sm"><SelectValue /></SelectTrigger>
+                        <SelectContent className="rounded-2xl border-2">
+                          <SelectItem value="objective" className="font-bold text-[10px] uppercase">Objective (MCQ)</SelectItem>
+                          <SelectItem value="written" className="font-bold text-[10px] uppercase">Written (Essay)</SelectItem>
+                          <SelectItem value="integrated" className="font-bold text-[10px] uppercase">Integrated (Mixed)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <ScrollArea className="h-[700px] pr-4">
+                    <div className="space-y-8">
+                      {newAssessmentQuestions.map((q, idx) => (
+                        <div key={q.id} className="p-6 rounded-3xl border-2 bg-gray-50/30 space-y-6 relative group">
+                          <Button variant="ghost" size="icon" onClick={() => removeQuestion(idx)} className="absolute top-4 right-4 h-10 w-10 rounded-full bg-red-50 text-red-500 opacity-0 group-hover:opacity-100 transition-all shadow-md">
+                            <Trash2 className="w-5 h-5" />
+                          </Button>
+                          
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest bg-white px-4 py-1.5 rounded-full border shadow-sm">Question {idx + 1}</span>
+                            <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest bg-white border-2">Mode: {q.type}</Badge>
+                          </div>
+
+                          {q.type === 'integrated' && (
+                            <div className="flex bg-gray-100/50 p-1 rounded-2xl w-fit border shadow-inner">
+                              <button 
+                                onClick={() => updateQuestion(idx, 'activeTab', 'objective')}
+                                className={cn("px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", q.activeTab !== 'written' ? "bg-white text-admin-seaBlue shadow-md" : "text-gray-400 hover:text-gray-600")}
+                              >MCQ COMPONENT</button>
+                              <button 
+                                onClick={() => updateQuestion(idx, 'activeTab', 'written')}
+                                className={cn("px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", q.activeTab === 'written' ? "bg-white text-blue-600 shadow-md" : "text-gray-400 hover:text-gray-600")}
+                              >WRITTEN COMPONENT</button>
+                            </div>
+                          )}
+
+                          {((q.type === 'written') || (q.type === 'integrated' && q.activeTab === 'written')) && (
+                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                              <Label className="text-[10px] uppercase text-gray-400 font-bold ml-1">Question Prompt (Written Part)</Label>
+                              <Textarea 
+                                value={q.text} 
+                                onChange={e => updateQuestion(idx, 'text', e.target.value)} 
+                                className="min-h-[100px] rounded-2xl border-2 font-medium text-sm resize-none p-4" 
+                                placeholder="Type the essay question or context here..."
+                              />
+                            </div>
+                          )}
+
+                          {(q.type === 'written' || (q.type === 'integrated' && q.activeTab === 'written')) && (
+                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                              <Label className="text-[10px] uppercase text-blue-600 font-black ml-1">Model Answer / Marking Guide</Label>
+                              <Textarea 
+                                value={q.modelAnswer || ''} 
+                                onChange={e => updateQuestion(idx, 'modelAnswer', e.target.value)} 
+                                className="min-h-[80px] rounded-2xl border-2 border-blue-100 bg-blue-50/20 font-medium text-xs resize-none p-4" 
+                                placeholder="Specify expected answer or keywords..."
+                              />
+                            </div>
+                          )}
+
+                          {(q.type === 'objective' || (q.type === 'integrated' && q.activeTab !== 'written')) && (
+                            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                              <div className="space-y-2">
+                                <Label className="text-[10px] uppercase text-gray-400 font-bold ml-1">{q.type === 'integrated' ? 'MCQ Specific Question' : 'Question Prompt'}</Label>
+                                <Textarea 
+                                  value={q.objectiveText || ''} 
+                                  onChange={e => updateQuestion(idx, 'objectiveText', e.target.value)} 
+                                  className="min-h-[100px] rounded-2xl border-2 font-medium text-sm resize-none p-4" 
+                                  placeholder={q.type === 'integrated' ? "Type the specific question for these options..." : "Type the full question here..."}
+                                />
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {q.options.map((opt: string, optIdx: number) => (
+                                <div key={optIdx} className="space-y-2">
+                                  <div className="flex items-center justify-between px-1">
+                                    <Label className="text-[9px] uppercase text-gray-400 font-bold">Option {String.fromCharCode(65 + optIdx)}</Label>
+                                    <div className="flex items-center gap-2">
+                                      <Label className="text-[8px] uppercase text-gray-400 font-bold">Correct?</Label>
+                                      <input 
+                                        type="radio" 
+                                        name={`correct-${q.id}`} 
+                                        checked={q.correctAnswer === optIdx} 
+                                        onChange={() => updateQuestion(idx, 'correctAnswer', optIdx)}
+                                        className="w-4 h-4 text-admin-seaBlue accent-admin-seaBlue"
+                                      />
+                                    </div>
+                                  </div>
+                                  <Textarea 
+                                    value={opt} 
+                                    onChange={e => {
+                                      const newOpts = [...q.options];
+                                      newOpts[optIdx] = e.target.value;
+                                      updateQuestion(idx, 'options', newOpts);
+                                    }} 
+                                    className={cn("min-h-[60px] rounded-2xl border-2 text-xs px-4 py-3 resize-none transition-all", q.correctAnswer === optIdx ? "border-green-500 bg-green-50/30" : "bg-white")}
+                                    placeholder={`Option ${String.fromCharCode(65 + optIdx)} content...`}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                      <div className="pt-4 flex justify-center">
+                        <Button 
+                          variant="outline" 
+                          onClick={addQuestion} 
+                          className="rounded-[20px] border-2 border-dashed border-admin-seaBlue text-admin-seaBlue hover:bg-admin-seaBlue hover:text-white transition-all font-black uppercase tracking-widest px-12 h-14"
+                        >
+                          <Plus className="w-5 h-5 mr-3 stroke-[3px]" /> ADD NEW QUESTION
+                        </Button>
+                      </div>
+
+                      {newAssessmentQuestions.length === 0 && (
+                        <div className="h-[500px] border-4 border-dashed rounded-[40px] flex flex-col items-center justify-center text-gray-300 gap-4 bg-gray-50/50">
+                          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-inner"><BookUser className="w-10 h-10 opacity-20" /></div>
+                          <p className="text-sm uppercase font-black tracking-[0.3em] italic opacity-30">No questions in workspace</p>
+                          <Button onClick={addQuestion} className="bg-admin-seaBlue text-white rounded-xl px-8 h-12 shadow-lg">START BUILDING</Button>
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </Card>
+              </div>
+
+              {/* Bottom: Active Assessments Management */}
+              <Card className="rounded-[40px] p-10 border-none shadow-2xl bg-admin-seaBlue text-white overflow-hidden relative">
+                <img src="/favicon.png" className="absolute -right-20 -bottom-20 w-80 h-80 opacity-10 rotate-12 grayscale" />
+                <div className="relative z-10">
+                  <div className="flex justify-between items-center mb-10">
+                    <div>
+                      <h3 className="text-2xl font-black italic uppercase tracking-tighter">Active System Assessments</h3>
+                      <p className="text-[10px] text-white/50 uppercase tracking-[0.2em] font-black mt-1">Live Management Console</p>
+                    </div>
+                    <Badge variant="outline" className="text-white border-white/20 px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest">{assessments.length} DEPLOYED</Badge>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {assessments.map(a => (
+                      <div key={a.id} className="p-6 rounded-[32px] bg-white/10 backdrop-blur-md border border-white/20 flex justify-between items-center group shadow-2xl transition-all hover:bg-white/15">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <Badge className="bg-white/20 text-white text-[9px] uppercase font-black px-3">{a.type}</Badge>
+                            <p className="text-[10px] text-admin-aquamarine font-black uppercase tracking-widest">{courses.find(c => c.id === a.course_id)?.name}</p>
+                          </div>
+                          <p className="text-base font-black tracking-tight text-white line-clamp-1 mb-1">{a.title}</p>
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-1.5 text-white/40 text-[9px] font-black uppercase"><Clock className="w-3 h-3" /> {a.duration}M</div>
+                            <div className="flex items-center gap-1.5 text-white/40 text-[9px] font-black uppercase"><Users className="w-3 h-3" /> {a.assigned_student_ids?.length || 0}</div>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/assessments/${a.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all ml-4 h-12 w-12 rounded-2xl"><Trash2 className="w-6 h-6" /></Button>
+                      </div>
+                    ))}
+                    {assessments.length === 0 && (
+                      <div className="lg:col-span-3 h-40 border-2 border-dashed border-white/10 rounded-[40px] flex items-center justify-center text-white/20 uppercase text-[10px] font-black tracking-[0.3em] italic">
+                        No Active System Assessments Found
+                      </div>
+                    )}
+                  </div>
                 </div>
               </Card>
-              <Card className="rounded-[32px] p-8 border-none shadow-xl bg-admin-seaBlue text-white overflow-hidden relative"><img src="/favicon.png" className="absolute -right-10 -bottom-10 w-48 h-48 opacity-10 rotate-12 grayscale" /><h3 className="text-lg mb-8 relative z-10 uppercase tracking-tight font-semibold">Active Assessments</h3><ScrollArea className="h-[450px] relative z-10 pr-4"><div className="space-y-4">{assessments.map(a => (<div key={a.id} className="p-4 rounded-2xl bg-white/10 border border-white/20 flex justify-between items-center group shadow-inner"><div><p className="text-sm mb-1 font-semibold">{a.title}</p><div className="flex gap-3 items-center"><Badge variant="secondary" className="bg-white/20 text-white text-[8px] uppercase font-semibold">{a.type}</Badge><p className="text-[9px] text-white/60 uppercase tracking-widest font-semibold">{courses.find(c => c.id === a.courseId)?.name}</p></div></div><Button variant="ghost" size="icon" onClick={() => fetch(`http://localhost:5000/api/assessments/${a.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-white/40 hover:text-red-400 transition-all"><Trash2 className="w-4 h-4" /></Button></div>))}</div></ScrollArea></Card>
             </div>
           )}
 
@@ -866,8 +1185,30 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {uploadedMaterials.map(m => (
                   <Card key={m.id} className="rounded-[32px] border-2 shadow-lg hover:shadow-2xl transition-all duration-500 p-6 group relative overflow-hidden bg-gray-50/50">
-                    <div className="flex justify-between items-start mb-4"><div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xl"><Files className="w-6 h-6" /></div><Button variant="ghost" size="icon" onClick={() => fetch(`http://localhost:5000/api/materials/${m.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:text-red-600"><Trash2 className="w-4 h-4" /></Button></div>
-                    <h4 className="text-gray-800 text-base mb-1 line-clamp-1 font-semibold">{m.title}</h4><p className="text-[10px] text-gray-400 uppercase mb-6 tracking-widest font-semibold">{m.type} • {courses.find(c => c.id === m.courseId)?.name || 'Global'}</p>
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-xl"><Files className="w-6 h-6" /></div>
+                      <div className="flex gap-2">
+                        {!m.approved && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="bg-green-50 text-green-600 border-green-200 hover:bg-green-100 text-[10px] font-bold h-8 rounded-lg"
+                            onClick={() => handleApprove(m.id)}
+                          >
+                            APPROVE
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/materials/${m.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:text-red-600"><Trash2 className="w-4 h-4" /></Button>
+                      </div>
+                    </div>
+                    <h4 className="text-gray-800 text-base mb-1 line-clamp-1 font-semibold">{m.title}</h4>
+                    <p className="text-[10px] text-gray-400 uppercase mb-2 tracking-widest font-semibold">{m.type} • {courses.find(c => c.id === m.course_id)?.name || 'Global'}</p>
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-[8px] text-gray-400 font-bold uppercase tracking-tighter">By {m.uploaded_by}</p>
+                      <Badge className={cn("text-[8px] font-black uppercase tracking-widest px-2 py-0.5", m.approved ? "bg-green-500 text-white" : "bg-yellow-500 text-white")}>
+                        {m.approved ? 'Approved' : 'Pending'}
+                      </Badge>
+                    </div>
                     <div className="flex gap-3"><Button variant="outline" className="flex-1 rounded-xl h-10 text-xs font-semibold border-2 transition-all hover:bg-blue-50" onClick={() => handleView(m)}><Eye className="w-4 h-4 mr-2" /> VIEW</Button><Button variant="outline" size="icon" className="rounded-xl h-10 w-10 border-2 transition-all" onClick={() => handleDownload(m)}><Download className="w-4 h-4" /></Button></div>
                   </Card>
                 ))}
@@ -876,15 +1217,78 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
           )}
 
           {activeTab === 'course-assignment' && (
-            <Card className="rounded-[32px] p-10 border-none shadow-xl bg-white relative overflow-hidden text-center">
-              <BookUser className="absolute -right-10 -bottom-10 w-48 h-48 text-gray-50 -rotate-12" />
-              <CardTitle className="text-xl uppercase tracking-tight text-gray-800 mb-10 relative z-10 font-semibold">Module Enrollment</CardTitle>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end max-w-4xl mx-auto relative z-10">
-                <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-400 font-semibold">Identify Student Profile</Label><Select value={studentToAssign} onValueChange={setStudentToAssign}><SelectTrigger className="rounded-xl h-12 border-2 text-sm font-semibold"><SelectValue placeholder="Select Profile" /></SelectTrigger><SelectContent className="rounded-xl shadow-xl">{myStudents.map(s => <SelectItem key={s.id} value={s.id} className="font-semibold">{s.name}</SelectItem>)}</SelectContent></Select></div>
-                <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-400 font-semibold">Select Course Module</Label><Select value={courseToAssign} onValueChange={setCourseToAssign}><SelectTrigger className="rounded-xl h-12 border-2 text-sm font-semibold"><SelectValue placeholder="Select Module" /></SelectTrigger><SelectContent className="rounded-xl shadow-xl">{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-semibold">{c.name}</SelectItem>)}</SelectContent></Select></div>
-                <Button onClick={handleAssignCourse} className="h-12 bg-admin-seaBlue hover:bg-blue-700 text-white rounded-xl shadow-lg transition-all text-xs font-semibold">AUTHORIZE ACCESS</Button>
+            <div className="space-y-8 animate-fade-in">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl text-gray-800 uppercase tracking-tight font-semibold">Module & Enrollment</h2>
+                  <p className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mt-1">Manage courses and student access</p>
+                </div>
+                <Button onClick={() => setShowAddCourseDialog(true)} className="bg-admin-seaBlue text-white rounded-2xl h-12 px-8 shadow-lg text-xs font-semibold">
+                  <Plus className="w-5 h-5 mr-2" /> CREATE COURSE
+                </Button>
               </div>
-            </Card>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <Card className="rounded-[32px] p-8 border-none shadow-xl bg-white">
+                  <CardTitle className="text-lg uppercase tracking-tight text-gray-800 mb-6 font-semibold">Available Modules</CardTitle>
+                  <ScrollArea className="h-[400px] pr-4">
+                    <div className="space-y-3">
+                      {courses.map(c => (
+                        <div key={c.id} className={cn("p-6 rounded-[24px] transition-all flex justify-between items-center group w-full text-white shadow-lg", c.color)}>
+                            <div className="flex items-center gap-4">
+                                <div>
+                                    <p className="uppercase tracking-tight text-sm leading-tight font-bold">{c.name}</p>
+                                    <p className="text-[9px] text-white/60 tracking-widest mt-0.5 font-semibold">ID: {c.id} • {c.instructor}</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={() => {
+                                  setSelectedCourseToEdit(c);
+                                  setNewCourse(c);
+                                  setShowAddCourseDialog(true);
+                                }} className="text-white/50 hover:text-white opacity-0 group-hover:opacity-100 transition-all">
+                                  <Settings className="w-5 h-5" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleDeleteCourse(c.id)} className="text-white/50 hover:text-white opacity-0 group-hover:opacity-100 transition-all">
+                                  <Trash2 className="w-5 h-5" />
+                                </Button>
+                            </div>
+                        </div>
+                      ))}
+                      {courses.length === 0 && (
+                        <div className="h-32 border-2 border-dashed rounded-3xl flex items-center justify-center text-gray-300 uppercase text-[10px] tracking-widest font-bold">
+                          No Modules Identified
+                        </div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                </Card>
+
+                <Card className="rounded-[32px] p-8 border-none shadow-xl bg-white relative overflow-hidden">
+                  <BookUser className="absolute -right-10 -bottom-10 w-48 h-48 text-gray-50 -rotate-12" />
+                  <CardTitle className="text-lg uppercase tracking-tight text-gray-800 mb-6 relative z-10 font-semibold">Enrollment Protocol</CardTitle>
+                  <div className="space-y-6 relative z-10">
+                    <div className="space-y-2">
+                      <Label className="text-[10px] uppercase text-gray-400 font-semibold ml-1">Student Profile</Label>
+                      <Select value={studentToAssign} onValueChange={setStudentToAssign}>
+                        <SelectTrigger className="rounded-xl h-12 border-2 font-semibold"><SelectValue placeholder="Select Profile" /></SelectTrigger>
+                        <SelectContent className="rounded-xl">{myStudents.map(s => <SelectItem key={s.id} value={s.id} className="font-semibold">{s.name} ({s.id})</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-[10px] uppercase text-gray-400 font-semibold ml-1">Course Module</Label>
+                      <Select value={courseToAssign} onValueChange={setCourseToAssign}>
+                        <SelectTrigger className="rounded-xl h-12 border-2 font-semibold"><SelectValue placeholder="Select Module" /></SelectTrigger>
+                        <SelectContent className="rounded-xl">{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-semibold">{c.name}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <Button onClick={handleAssignCourse} className="w-full h-14 bg-admin-seaBlue hover:bg-blue-700 text-white rounded-2xl shadow-xl transition-all text-xs font-bold uppercase tracking-widest">
+                      AUTHORIZE ACCESS
+                    </Button>
+                  </div>
+                </Card>
+              </div>
+            </div>
           )}
 
           {activeTab === 'results' && (
@@ -895,8 +1299,8 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                 <TableBody>
                   {results.map(r => (
                     <TableRow key={r.id} className="border-b hover:bg-blue-50/50 transition-colors">
-                      <TableCell className="px-8 py-6"><div className="flex items-center gap-4"><Avatar className="w-10 h-10 border-2 border-blue-100 shadow-sm"><AvatarFallback className="bg-blue-600 text-white uppercase text-xs font-semibold">{r.studentName?.[0] || 'S'}</AvatarFallback></Avatar><div><p className="text-gray-800 text-sm tracking-tight font-semibold">{r.studentName}</p><p className="text-[10px] text-gray-400 tracking-widest font-semibold">{r.studentId}</p></div></div></TableCell>
-                      <TableCell className="text-center text-gray-500 uppercase text-[9px] tracking-wider font-semibold">{r.assessmentTitle}</TableCell>
+                      <TableCell className="px-8 py-6"><div className="flex items-center gap-4"><Avatar className="w-10 h-10 border-2 border-blue-100 shadow-sm"><AvatarFallback className="bg-blue-600 text-white uppercase text-xs font-semibold">{r.student_name?.[0] || 'S'}</AvatarFallback></Avatar><div><p className="text-gray-800 text-sm tracking-tight font-semibold">{r.student_name}</p><p className="text-[10px] text-gray-400 tracking-widest font-semibold">{r.student_id}</p></div></div></TableCell>
+                      <TableCell className="text-center text-gray-500 uppercase text-[9px] tracking-wider font-semibold">{r.assessment_title}</TableCell>
                       <TableCell className="text-center font-semibold"><span className={`text-xl tracking-tight ${r.score >= 50 ? 'text-green-600' : 'text-red-600'}`}>{r.score}%</span></TableCell>
                       <TableCell className="text-center"><Badge variant="outline" className={`px-3 py-1 rounded-full text-[8px] uppercase tracking-widest font-semibold ${r.status === 'released' ? 'text-green-600 border-green-200 bg-green-50' : 'text-orange-600 border-orange-200 bg-orange-50'}`}>{r.status}</Badge></TableCell>
                       <TableCell className="text-right px-8"><Button onClick={() => { setSelectedResult(r); setMarkingScore(r.score); setMarkingScoreStatus(r.status); setShowMarkDialog(true); }} className="bg-admin-seaBlue hover:bg-blue-700 text-white px-4 rounded-xl h-10 shadow-lg uppercase text-[9px] tracking-widest transition-all font-semibold">REVIEW</Button></TableCell>
@@ -910,14 +1314,24 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
           {activeTab === 'activity' && (
             <Card className="rounded-[32px] border-none shadow-2xl p-8 bg-white/80 backdrop-blur-sm">
               <CardTitle className="text-lg uppercase tracking-tight mb-8 text-center text-gray-800 font-semibold">System Audit Log</CardTitle>
-              <div className="space-y-4 max-w-3xl mx-auto">
+              <div className="space-y-4 max-w-4xl mx-auto">
                 {activityLogs.map(log => (
-                  <div key={log.id} className="flex gap-4 p-4 rounded-2xl border bg-white hover:border-blue-400 transition-all shadow-sm group">
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0"><ActivityIcon className="w-5 h-5" /></div>
-                    <div className="flex-1">
-                      <div className="flex justify-between items-start mb-1"><h4 className="text-sm text-gray-800 tracking-tight font-semibold">{log.action}</h4><span className="text-[8px] text-gray-400 uppercase tracking-widest font-semibold">{new Date(log.timestamp).toLocaleString()}</span></div>
-                      <p className="text-xs text-gray-500 tracking-wide font-semibold">{log.details}</p>
-                      <p className="text-[8px] text-blue-600 mt-1 tracking-widest uppercase font-semibold">Executor ID: {log.user_id}</p>
+                  <div key={log.id} className="flex items-center gap-4 p-4 rounded-2xl border bg-white hover:border-blue-200 transition-all shadow-sm group">
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${log.action === 'login' ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-600'}`}>
+                      <ActivityIcon className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 grid grid-cols-3 items-center">
+                      <div>
+                        <p className="font-semibold text-gray-800">{log.user_name || 'Unknown User'}</p>
+                        <p className="text-xs text-gray-500">{log.user_id}</p>
+                      </div>
+                      <div className="text-center">
+                        {log.user_status && getStatusBadge(log.user_status)}
+                      </div>
+                      <div className="text-right">
+                        <p className={`font-semibold uppercase text-xs ${log.action === 'login' ? 'text-green-600' : 'text-red-600'}`}>{log.action}</p>
+                        <p className="text-[10px] text-gray-400">{new Date(log.timestamp).toLocaleString()}</p>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -986,32 +1400,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent className="rounded-[32px] max-w-[320px] text-center p-8 shadow-3xl border-none bg-white sm:max-w-[320px]">
-          <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-            <Trash2 className="w-6 h-6 text-red-500" />
-          </div>
-          <DialogTitle className="text-base mb-2 uppercase tracking-tight text-gray-800 text-center font-semibold">Confirm Wipe?</DialogTitle>
-          <p className="text-gray-400 uppercase text-[8px] tracking-widest mb-8 text-center px-2 leading-relaxed font-semibold">
-            This process is final and cannot be reversed by system protocols
-          </p>
-          <div className="flex flex-col gap-2 w-full">
-            <Button 
-              onClick={handleDeleteStudent} 
-              className="w-full bg-red-500 hover:bg-red-600 text-white h-10 rounded-xl shadow-lg text-[9px] uppercase tracking-widest transition-all font-semibold"
-            >
-              WIPE SYSTEM DATA
-            </Button>
-            <Button 
-              variant="ghost" 
-              onClick={() => setShowDeleteDialog(false)} 
-              className="w-full text-gray-400 h-10 rounded-xl uppercase text-[9px] tracking-widest hover:bg-gray-50 font-semibold"
-            >
-              Abort Process
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+
 
       <Dialog open={showAdminUploadDialog} onOpenChange={setShowAdminUploadDialog}>
         <DialogContent className="rounded-[40px] max-w-lg p-10 border-none shadow-3xl bg-white shadow-3xl"><div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-600 to-indigo-600" /><DialogHeader className="mb-8 text-center"><DialogTitle className="text-lg uppercase text-admin-seaBlue tracking-tight font-semibold">SCM Deploy</DialogTitle></DialogHeader>
@@ -1120,8 +1509,8 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
           <div className="space-y-6">
             <div className="p-4 rounded-3xl bg-gray-50 border-2 border-dashed text-center">
               <p className="text-[9px] text-gray-400 uppercase tracking-widest mb-1 font-semibold">Target Profile</p>
-              <p className="text-base text-gray-800 uppercase font-semibold">{selectedResult?.studentName}</p>
-              <p className="text-[9px] text-blue-600 uppercase tracking-tighter mt-0.5 font-semibold">{selectedResult?.assessmentTitle}</p>
+              <p className="text-base text-gray-800 uppercase font-semibold">{selectedResult?.student_name}</p>
+              <p className="text-[9px] text-blue-600 uppercase tracking-tighter mt-0.5 font-semibold">{selectedResult?.assessment_title}</p>
             </div>
             <div className="space-y-2">
               <Label className="text-[9px] uppercase text-gray-400 ml-1 font-semibold">Awarded Score (%)</Label>
@@ -1139,6 +1528,37 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
             </div>
           </div>
           <DialogFooter className="mt-10"><Button onClick={handleUpdateResult} className="w-full bg-admin-seaBlue hover:bg-blue-700 text-white h-16 rounded-2xl shadow-xl uppercase tracking-widest text-xs transition-all hover:scale-[1.02] font-semibold">COMMIT ACADEMIC RECORD</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showAddCourseDialog} onOpenChange={(open) => {
+        setShowAddCourseDialog(open);
+        if (!open) {
+          setSelectedCourseToEdit(null);
+          setNewCourse({ id: '', name: '', code: '', instructor: '', color: 'from-blue-500 to-indigo-500', image: '/course-placeholder.svg' });
+        }
+      }}>
+        <DialogContent className="rounded-[40px] max-w-md p-10 border-none shadow-3xl bg-white overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-admin-seaBlue to-admin-aquamarine" />
+          <DialogHeader className="mb-8 text-center">
+            <DialogTitle className="text-lg uppercase text-admin-seaBlue tracking-tight font-semibold">
+              {selectedCourseToEdit ? 'Edit Course Module' : 'New Course Module'}
+            </DialogTitle>
+            <DialogDescription className="text-gray-400 uppercase text-[9px] tracking-widest mt-1 text-center font-semibold">
+              {selectedCourseToEdit ? 'Update existing academic module' : 'Initialize new academic module'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5"><Label className="text-[9px] text-gray-400 uppercase tracking-widest ml-1 font-semibold">Module Name</Label><Input value={newCourse.name} onChange={e => setNewCourse({...newCourse, name: e.target.value.toUpperCase()})} className="h-11 rounded-xl border-2 text-sm font-semibold" placeholder="e.g. MATHEMATICS" /></div>
+            <div className="space-y-1.5"><Label className="text-[9px] text-gray-400 uppercase tracking-widest ml-1 font-semibold">Short Code</Label><Input value={newCourse.code} onChange={e => setNewCourse({...newCourse, code: e.target.value.toUpperCase()})} className="h-11 rounded-xl border-2 text-sm font-semibold" placeholder="e.g. MTH" /></div>
+            <div className="space-y-1.5"><Label className="text-[9px] text-gray-400 uppercase tracking-widest ml-1 font-semibold">System ID</Label><Input value={newCourse.id} onChange={e => setNewCourse({...newCourse, id: e.target.value.toUpperCase()})} disabled={!!selectedCourseToEdit} className="h-11 rounded-xl border-2 text-sm font-semibold disabled:bg-gray-50 disabled:text-gray-400" placeholder="e.g. MTH101" /></div>
+            <div className="space-y-1.5"><Label className="text-[9px] text-gray-400 uppercase tracking-widest ml-1 font-semibold">Lead Instructor</Label><Input value={newCourse.instructor} onChange={e => setNewCourse({...newCourse, instructor: e.target.value})} className="h-11 rounded-xl border-2 text-sm font-semibold" /></div>
+          </div>
+          <DialogFooter className="mt-10">
+            <Button onClick={handleAddCourse} className="w-full bg-admin-seaBlue hover:bg-blue-700 text-white h-14 rounded-2xl shadow-xl uppercase text-xs tracking-widest transition-all font-bold">
+              {selectedCourseToEdit ? 'UPDATE MODULE' : 'INITIALIZE MODULE'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

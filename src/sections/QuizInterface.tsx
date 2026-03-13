@@ -36,14 +36,14 @@ interface Question {
 
 interface Assessment {
   id: string;
-  courseId: string;
+  course_id: string;
   type: 'quiz' | 'examination' | 'assignment';
   title: string;
   mode: 'objectives' | 'written' | 'integrated' | 'file_upload';
-  submissionMode: 'online' | 'file';
-  questionFileUrl?: string;
-  questionFileName?: string;
-  structuredQuestions: Question[];
+  submission_mode: 'online' | 'file';
+  question_file_url?: string;
+  question_file_name?: string;
+  structured_questions: Question[];
   duration: number;
 }
 
@@ -128,7 +128,7 @@ export function QuizInterface({ assessment, onComplete, onCancel }: QuizInterfac
     return () => window.removeEventListener('alamel_time_up', handleTimeUp);
   }, []);
 
-  const questions = assessment.structuredQuestions || [];
+  const questions = assessment.structured_questions || [];
   const totalQuestions = questions.length;
   const currentQuestion = questions[currentQuestionIdx];
 
@@ -161,13 +161,13 @@ export function QuizInterface({ assessment, onComplete, onCancel }: QuizInterfac
   };
 
   const handleSubmit = () => {
-    if (assessment.submissionMode === 'file' && !studentUpload) {
+    if (assessment.submission_mode === 'file' && !studentUpload) {
       toast.error('Please upload your submission file before submitting.');
       return;
     }
 
     const answeredCount = Object.keys(answers).length;
-    if (assessment.submissionMode === 'online' && answeredCount < totalQuestions) {
+    if (assessment.submission_mode === 'online' && answeredCount < totalQuestions) {
       toast.warning(`You have ${totalQuestions - answeredCount} unanswered questions!`);
     }
     setShowSubmitDialog(true);
@@ -201,7 +201,7 @@ export function QuizInterface({ assessment, onComplete, onCancel }: QuizInterfac
 
   if (showResults) {
     const score = calculateScore();
-    const hasWrittenOrFile = questions.some(q => q.type === 'written') || assessment.submissionMode === 'file';
+    const hasWrittenOrFile = questions.some(q => q.type === 'written') || assessment.submission_mode === 'file';
 
     return (
       <div className="max-w-2xl mx-auto animate-scale-in">
@@ -260,8 +260,9 @@ export function QuizInterface({ assessment, onComplete, onCancel }: QuizInterfac
       const reader = new FileReader();
       reader.onload = (event) => {
         const result = event.target?.result as string;
-        if (result.length > 4 * 1024 * 1024) {
-          toast.error('File is too large (Max 4MB).');
+        const sizeMB = file.size / (1024 * 1024);
+        if (sizeMB > 50) {
+          toast.error('File is too large (Max 50MB).');
           return;
         }
         setStudentUpload({ url: result, name: file.name });
@@ -276,7 +277,7 @@ export function QuizInterface({ assessment, onComplete, onCancel }: QuizInterfac
   return (
     <div className="max-w-5xl mx-auto animate-slide-in-right">
       {/* Progress Header - only for online structured assessments */}
-      {assessment.mode !== 'file_upload' && assessment.submissionMode === 'online' && (
+      {assessment.mode !== 'file_upload' && assessment.submission_mode === 'online' && (
         <Card className="mb-6 border-none shadow-sm">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
@@ -341,7 +342,7 @@ export function QuizInterface({ assessment, onComplete, onCancel }: QuizInterfac
               {assessment.mode.replace('_', ' ')}
             </Badge>
             <Badge className="bg-white/20 text-white border-none px-3 capitalize">
-              {assessment.submissionMode} Submission
+              {assessment.submission_mode} Submission
             </Badge>
           </div>
         </div>
@@ -355,13 +356,13 @@ export function QuizInterface({ assessment, onComplete, onCancel }: QuizInterfac
         <CardContent className="flex-1 p-8 pt-0">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 h-full">
             {/* Left side: Questions */}
-            <div className={`space-y-4 ${assessment.submissionMode === 'file' ? 'lg:border-r lg:pr-8' : 'lg:col-span-2'}`}>
-              {assessment.mode === 'file_upload' && assessment.questionFileUrl ? (
+            <div className={`space-y-4 ${assessment.submission_mode === 'file' ? 'lg:border-r lg:pr-8' : 'lg:col-span-2'}`}>
+              {assessment.mode === 'file_upload' && assessment.question_file_url ? (
                 <div className="w-full h-[500px] border-2 rounded-2xl overflow-hidden bg-gray-100">
-                  {assessment.questionFileUrl.startsWith('data:application/pdf') ? (
-                    <iframe src={assessment.questionFileUrl} className="w-full h-full" title="Question File" />
+                  {assessment.question_file_url.startsWith('data:application/pdf') ? (
+                    <iframe src={assessment.question_file_url} className="w-full h-full" title="Question File" />
                   ) : (
-                    <img src={assessment.questionFileUrl} className="w-full h-full object-contain" alt="Questions" />
+                    <img src={assessment.question_file_url} className="w-full h-full object-contain" alt="Questions" />
                   )}
                 </div>
               ) : assessment.mode !== 'file_upload' ? (
@@ -414,8 +415,8 @@ export function QuizInterface({ assessment, onComplete, onCancel }: QuizInterfac
               )}
             </div>
 
-            {/* Right side: Student File Upload (only if submissionMode is 'file') */}
-            {assessment.submissionMode === 'file' && (
+            {/* Right side: Student File Upload (only if submission_mode is 'file') */}
+            {assessment.submission_mode === 'file' && (
               <div className="space-y-6">
                 <div className="bg-green-50/50 border-2 border-dashed border-green-200 rounded-3xl p-8 h-full flex flex-col justify-center">
                   <div className="text-center space-y-4">

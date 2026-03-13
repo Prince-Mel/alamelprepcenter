@@ -1,0 +1,37 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" xmlns="http://www.w3.org/2000/svg">
+  <!-- Teal Background -->
+  <rect width="1200" height="630" fill="#20a2b9" />
+  
+  <!-- Content Container -->
+  <g transform="translate(600, 315)">
+    <!-- Central Circle Heuristic -->
+    <circle r="180" fill="white" opacity="0.1" stroke="white" stroke-width="2" />
+    <circle r="160" fill="none" stroke="white" stroke-width="1" stroke-dasharray="10,10" />
+    
+    <!-- Icons (Simplified SVGs representing the style) -->
+    <!-- Globe -->
+    <circle r="60" fill="#4fbcd1" stroke="white" stroke-width="4" />
+    <path d="M -60 0 A 60 60 0 0 0 60 0 M 0 -60 A 60 60 0 0 0 0 60" fill="none" stroke="white" stroke-width="2" />
+    
+    <!-- Surrounding Elements (Abstracted icons) -->
+    <g transform="translate(-130, -80)">
+      <rect width="40" height="30" rx="5" fill="white" /> <!-- Innovation -->
+      <text x="20" y="45" font-family="Arial" font-size="12" font-weight="bold" fill="white" text-anchor="middle">INNOVATION</text>
+    </g>
+    <g transform="translate(90, -80)">
+      <rect width="40" height="30" rx="5" fill="white" /> <!-- Education -->
+      <text x="20" y="45" font-family="Arial" font-size="12" font-weight="bold" fill="white" text-anchor="middle">EDUCATION</text>
+    </g>
+    <g transform="translate(-130, 80)">
+      <rect width="40" height="30" rx="5" fill="white" /> <!-- Ecosystems -->
+      <text x="20" y="45" font-family="Arial" font-size="12" font-weight="bold" fill="white" text-anchor="middle">ECOSYSTEMS</text>
+    </g>
+    <g transform="translate(90, 80)">
+      <rect width="40" height="30" rx="5" fill="white" /> <!-- Biodiversity -->
+      <text x="20" y="45" font-family="Arial" font-size="12" font-weight="bold" fill="white" text-anchor="middle">BIODIVERSITY</text>
+    </g>
+  </g>
+  
+  <!-- Subtle desk/blur background effect (simulated) -->
+  <rect width="1200" height="630" fill="white" opacity="0.05" />
+</svg>
