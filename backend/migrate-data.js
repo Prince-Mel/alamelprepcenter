@@ -1,7 +1,20 @@
 import mysql from 'mysql2/promise';
-import dotenv from 'dotenv';
 
-dotenv.config();
+const localConfig = {
+  host: 'localhost',
+  user: 'root',
+  password: '',
+  database: 'student_app'
+};
+
+const cloudConfig = {
+  host: 'yamabiko.proxy.rlwy.net',
+  port: 48079,
+  user: 'root',
+  password: 'eLfTUyLYovLyzXHcbKgsBhLsFGreewbt',
+  database: 'railway',
+  multipleStatements: true
+};
 
 const schema = `
 CREATE TABLE IF NOT EXISTS users (
@@ -15,7 +28,8 @@ CREATE TABLE IF NOT EXISTS users (
     admin_code VARCHAR(50),
     email VARCHAR(255),
     contact VARCHAR(50),
-    created_by VARCHAR(50)
+    created_by VARCHAR(50),
+    details JSON
 );
 
 CREATE TABLE IF NOT EXISTS courses (
@@ -116,32 +130,76 @@ CREATE TABLE IF NOT EXISTS activity_log (
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 );
-
-INSERT IGNORE INTO users (id, name, password, role, status) 
-VALUES ('ADMIN', 'SYSTEM ADMINISTRATOR', 'admin123', 'admin', 'active');
 `;
 
-async function init() {
-  const connection = await mysql.createConnection({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASS,
-    port: process.env.DB_PORT || 3306,
-    multipleStatements: true
-  });
-
+async function migrate() {
+  let localConn, cloudConn;
   try {
-    const dbName = process.env.DB_NAME;
-    console.log('Finalizing database ' + dbName + '...');
-    await connection.query('CREATE DATABASE IF NOT EXISTS ' + dbName);
-    await connection.query('USE ' + dbName);
-    await connection.query(schema);
-    console.log('Full Database Schema ready!');
+    console.log('Connecting to databases...');
+    localConn = await mysql.createConnection(localConfig);
+    cloudConn = await mysql.createConnection(cloudConfig);
+
+    console.log('Initializing Cloud Schema...');
+    // Drop existing tables to start fresh with correct schema
+    const dropTables = [
+      'activity_log', 'registration_requests', 'announcements', 
+      'materials', 'results', 'assessments', 'enrollments', 
+      'courses', 'users'
+    ];
+    await cloudConn.execute('SET FOREIGN_KEY_CHECKS = 0');
+    for (const table of dropTables) {
+      await cloudConn.execute(`DROP TABLE IF EXISTS ${table}`);
+    }
+    await cloudConn.query(schema);
+    console.log('Cloud Schema Initialized.');
+
+    const tables = [
+      'users', 
+      'courses', 
+      'enrollments', 
+      'materials', 
+      'assessments', 
+      'results', 
+      'announcements', 
+      'registration_requests', 
+      'activity_log'
+    ];
+
+    for (const table of tables) {
+      console.log(`Migrating table: ${table}...`);
+      
+      const [rows] = await localConn.execute(`SELECT * FROM ${table}`);
+      console.log(`  Found ${rows.length} rows in ${table}`);
+
+      if (rows.length === 0) continue;
+
+      const columns = Object.keys(rows[0]);
+      const placeholders = columns.map(() => '?').join(', ');
+      const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`;
+
+      for (const row of rows) {
+        const values = columns.map(col => {
+          const val = row[col];
+          if (val !== null && typeof val === 'object' && !(val instanceof Date)) {
+            return JSON.stringify(val);
+          }
+          return val;
+        });
+        await cloudConn.execute(sql, values);
+      }
+      
+      console.log(`  Successfully migrated ${rows.length} rows to ${table}`);
+    }
+
+    await cloudConn.execute(`SET FOREIGN_KEY_CHECKS = 1`);
+    console.log('--- Migration Complete! ---');
+
   } catch (err) {
-    console.error('Update failed:', err.message);
+    console.error('Migration Failed:', err.message);
   } finally {
-    await connection.end();
+    if (localConn) await localConn.end();
+    if (cloudConn) await cloudConn.end();
   }
 }
 
-init();
+migrate();
