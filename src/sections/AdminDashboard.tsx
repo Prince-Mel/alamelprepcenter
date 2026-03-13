@@ -646,7 +646,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                 {activeTab === item.value && <div className="absolute left-0 w-1 h-6 bg-white rounded-r-full" />}
                 <div className="relative">
                   <item.icon className={`w-5 h-5 flex-shrink-0 ${activeTab === item.value ? 'text-teal-900' : ''}`} />
-                  {item.badge > 0 && (
+                  {item.badge !== undefined && item.badge > 0 && (
                     <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[8px] font-bold w-4 h-4 flex items-center justify-center rounded-full animate-pulse">
                       {item.badge}
                     </span>
@@ -909,7 +909,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                         {r.status === 'approved' ? (
                           <div className="flex flex-col items-end gap-2">
                             <Badge className="bg-green-600 text-white px-4 py-1.5 rounded-xl text-[9px] font-black tracking-widest mb-1 shadow-lg shadow-green-100 uppercase">Authorized: {r.approved_user_id}</Badge>
-                            <Button variant="ghost" onClick={() => handleUnapproveRequest(r)} className="text-red-500 hover:bg-red-50 h-8 px-4 rounded-xl text-[8px] font-black tracking-widest uppercase border-2 border-red-50">Revoke Access</Button>
+                            <Button variant="ghost" onClick={() => handleRejectRequest(r)} className="text-red-500 hover:bg-red-50 h-8 px-4 rounded-xl text-[8px] font-black tracking-widest uppercase border-2 border-red-50">Revoke Access</Button>
                           </div>
                         ) : r.status === 'rejected' ? (
                           <div className="flex flex-col items-end gap-2">
