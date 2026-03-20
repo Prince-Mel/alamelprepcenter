@@ -114,6 +114,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const [regRequests, setRegRequests] = useState<any[]>([]);
   const [activityLogs, setActivityLogs] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeploying, setIsDeploying] = useState(false);
 
   // UI State
   const [sidebarCollapsed] = useState(false);
@@ -372,10 +373,24 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   };
 
   const handleCreateAssessment = async () => {
-    if (!selectedCourse || !assessmentTitle || !endDate) {
-      toast.error('Required fields missing (Course, Title, Deadline)');
+    if (!selectedCourse) {
+      toast.error('Please select a target course');
       return;
     }
+    if (!assessmentTitle.trim()) {
+      toast.error('Please enter an assessment title');
+      return;
+    }
+    if (!endDate) {
+      toast.error('Please set a deadline for the assessment');
+      return;
+    }
+    if (newAssessmentQuestions.length === 0) {
+      toast.error('Please add at least one question to the assessment');
+      return;
+    }
+
+    setIsDeploying(true);
     const config = { 
       id: `ASMT${Date.now()}`, 
       course_id: selectedCourse, 
@@ -389,12 +404,31 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
       end_date: new Date(endDate).toISOString(), 
       assigned_student_ids: assignedStudents 
     };
-    const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
-    if (res.ok) { 
-      fetchData(); 
-      toast.success('Assessment Published with ' + newAssessmentQuestions.length + ' questions');
-      setNewAssessmentQuestions([]);
-      setAssessmentTitle('');
+
+    try {
+      const res = await fetch(`${API_URL}/api/assessments`, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify(config) 
+      });
+      
+      if (res.ok) { 
+        fetchData(); 
+        toast.success(`Assessment "${assessmentTitle}" published with ${newAssessmentQuestions.length} questions`);
+        setNewAssessmentQuestions([]);
+        setAssessmentTitle('');
+        setSelectedCourse('');
+        setEndDate('');
+        setAssignedStudents([]);
+      } else {
+        const errorData = await res.json();
+        toast.error(errorData.message || 'Failed to publish assessment');
+      }
+    } catch (e) {
+      console.error('Deployment error:', e);
+      toast.error('Network error: Could not reach the server');
+    } finally {
+      setIsDeploying(false);
     }
   };
 
@@ -919,8 +953,12 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                     </div>
                     <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Assign To</Label><MultiSelect options={studentOptions} selected={assignedStudents} onChange={setAssignedStudents} placeholder="Select students..." /></div>
                     
-                    <Button onClick={handleCreateAssessment} className="w-full bg-blue-600 text-white h-14 rounded-2xl shadow-lg uppercase transition-all text-xs font-black tracking-widest italic mt-4">
-                      DEPLOY ASSESSMENT
+                    <Button 
+                      onClick={handleCreateAssessment} 
+                      disabled={isDeploying}
+                      className="w-full bg-blue-600 text-white h-14 rounded-2xl shadow-lg uppercase transition-all text-xs font-black tracking-widest italic mt-4"
+                    >
+                      {isDeploying ? 'DEPLOYING...' : 'DEPLOY ASSESSMENT'}
                     </Button>
                   </div>
                 </Card>
