@@ -112,7 +112,7 @@ class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean,
             <p className="text-gray-600 mb-6 text-sm font-medium">The application encountered an error. Please try clearing your local storage or contact support.</p>
             <pre className="bg-gray-100 p-4 rounded-lg text-[10px] overflow-auto max-h-40 mb-6 font-medium">{this.state.error?.toString()}</pre>
             <button 
-              onClick={() => { localStorage.clear(); window.location.reload(); }}
+              onClick={() => { sessionStorage.clear(); window.location.reload(); }}
               className="w-full py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors text-xs uppercase tracking-widest"
             >
               Reset Application Data
@@ -128,26 +128,26 @@ class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean,
 function App() {
   const [currentUser, setCurrentUser] = useState<Student | User | null>(() => {
     try {
-      const savedUser = localStorage.getItem('alamel_user');
+      const savedUser = sessionStorage.getItem('alamel_user');
       return savedUser ? JSON.parse(savedUser) : null;
     } catch (e) {
-      console.error("Failed to parse user from localStorage", e);
+      console.error("Failed to parse user from sessionStorage", e);
       return null;
     }
   });
 
   const [currentView, setCurrentView] = useState<View>(() => {
     try {
-      const savedUser = localStorage.getItem('alamel_user');
+      const savedUser = sessionStorage.getItem('alamel_user');
       if (!savedUser) return 'login';
 
-      const savedView = localStorage.getItem('alamel_current_view');
+      const savedView = sessionStorage.getItem('alamel_current_view');
       if (savedView) return savedView as View;
       
       const user = JSON.parse(savedUser);
       return user.role === 'admin' || user.role === 'sub-admin' ? 'admin' : 'student';
     } catch (e) {
-      console.error("Failed to parse view from localStorage", e);
+      console.error("Failed to parse view from sessionStorage", e);
     }
     return 'login';
   });
@@ -159,7 +159,7 @@ function App() {
   }, [currentView, currentUser]);
 
   useEffect(() => {
-    localStorage.setItem('alamel_current_view', currentView);
+    sessionStorage.setItem('alamel_current_view', currentView);
   }, [currentView]);
 
   const handleLogin = (user: Student | User) => {
@@ -167,14 +167,14 @@ function App() {
     const updatedUser = { ...user, last_login: now };
     
     setCurrentUser(updatedUser);
-    localStorage.setItem('alamel_user', JSON.stringify(updatedUser));
+    sessionStorage.setItem('alamel_user', JSON.stringify(updatedUser));
     
     setCurrentView(user.role === 'admin' || user.role === 'sub-admin' ? 'admin' : 'student');
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
-    localStorage.removeItem('alamel_user');
+    sessionStorage.removeItem('alamel_user');
     setCurrentView('login');
   };
 
@@ -183,7 +183,7 @@ function App() {
 
   const handleUpdateUser = (updatedUser: User | Student, oldId?: string) => {
     setCurrentUser(updatedUser);
-    localStorage.setItem('alamel_user', JSON.stringify(updatedUser));
+    sessionStorage.setItem('alamel_user', JSON.stringify(updatedUser));
   };
 
   return (
