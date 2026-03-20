@@ -46,10 +46,23 @@ function logDebug(msg) {
 
 const formatMySQLDate = (isoString) => {
   if (!isoString) return null;
-  const date = new Date(isoString);
-  if (isNaN(date.getTime())) return null;
-  // Convert to YYYY-MM-DD HH:MM:SS format for MySQL DATETIME
-  return date.toISOString().slice(0, 19).replace('T', ' ');
+  try {
+    const date = new Date(isoString);
+    if (isNaN(date.getTime())) {
+      logDebug(`[Date Error] Invalid date received: ${isoString}`);
+      return null;
+    }
+    const pad = (n) => (n < 10 ? '0' + n : n);
+    return date.getFullYear() + '-' +
+      pad(date.getMonth() + 1) + '-' +
+      pad(date.getDate()) + ' ' +
+      pad(date.getHours()) + ':' +
+      pad(date.getMinutes()) + ':' +
+      pad(date.getSeconds());
+  } catch (err) {
+    logDebug(`[Date Error] Conversion failed for ${isoString}: ${err.message}`);
+    return null;
+  }
 };
 
 const pool = mysql.createPool({
@@ -428,6 +441,13 @@ app.get('/api/assessments', async (req, res) => {
 
 app.post('/api/assessments', async (req, res) => {
   const { id, course_id, title, type, marking_type, submission_mode, mode, duration, start_date, end_date, structured_questions, question_file_url, question_file_name, assigned_student_ids } = req.body;
+  
+  const formattedStart = formatMySQLDate(start_date);
+  const formattedEnd = formatMySQLDate(end_date);
+  
+  logDebug(`[Assessments] Creating: "${title}". Raw Start: ${start_date}, Formatted: ${formattedStart}`);
+  logDebug(`[Assessments] Raw End: ${end_date}, Formatted: ${formattedEnd}`);
+
   try {
     await pool.execute('INSERT INTO assessments (id, course_id, title, type, marking_type, submission_mode, mode, duration, start_date, end_date, structured_questions, question_file_url, question_file_name, assigned_student_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
@@ -439,15 +459,18 @@ app.post('/api/assessments', async (req, res) => {
         submission_mode || null, 
         mode || null, 
         duration || 0, 
-        formatMySQLDate(start_date), 
-        formatMySQLDate(end_date), 
+        formattedStart, 
+        formattedEnd, 
         JSON.stringify(structured_questions || []), 
         question_file_url || null, 
         question_file_name || null, 
         JSON.stringify(assigned_student_ids || [])
       ]);
     res.status(201).json({ message: 'Assessment Created' });
-  } catch (error) { res.status(500).json({ message: error.message }); }
+  } catch (error) { 
+    logDebug(`[Assessments Error] ${error.message}`);
+    res.status(500).json({ message: error.message }); 
+  }
 });
 
 app.delete('/api/assessments/:id', async (req, res) => {
