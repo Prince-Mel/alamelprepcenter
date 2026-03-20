@@ -44,6 +44,14 @@ function logDebug(msg) {
   }
 }
 
+const formatMySQLDate = (isoString) => {
+  if (!isoString) return null;
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return null;
+  // Convert to YYYY-MM-DD HH:MM:SS format for MySQL DATETIME
+  return date.toISOString().slice(0, 19).replace('T', ' ');
+};
+
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -431,8 +439,8 @@ app.post('/api/assessments', async (req, res) => {
         submission_mode || null, 
         mode || null, 
         duration || 0, 
-        start_date || null, 
-        end_date || null, 
+        formatMySQLDate(start_date), 
+        formatMySQLDate(end_date), 
         JSON.stringify(structured_questions || []), 
         question_file_url || null, 
         question_file_name || null, 
