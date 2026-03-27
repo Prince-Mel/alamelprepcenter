@@ -93,7 +93,8 @@ async function applySchemaUpdates() {
     `ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending' AFTER details;`,
     `ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS approved_user_id VARCHAR(50) AFTER status;`,
     `ALTER TABLE materials ADD COLUMN IF NOT EXISTS assigned_student_ids JSON;`,
-    `ALTER TABLE materials MODIFY COLUMN url LONGTEXT;`
+    `ALTER TABLE materials MODIFY COLUMN url LONGTEXT;`,
+    `ALTER TABLE results ADD COLUMN IF NOT EXISTS show_score BOOLEAN DEFAULT TRUE;`
   ];
 
   logDebug('Syncing database schema (ON UPDATE CASCADE)...');
@@ -509,9 +510,9 @@ app.get('/api/results/:student_id', async (req, res) => {
 });
 
 app.post('/api/results', async (req, res) => {
-  const { id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking } = req.body;
+  const { id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking, show_score } = req.body;
   try {
-    await pool.execute('INSERT INTO results (id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    await pool.execute('INSERT INTO results (id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking, show_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         id || null, 
         student_id || null, 
@@ -523,17 +524,26 @@ app.post('/api/results', async (req, res) => {
         JSON.stringify(answers || {}), 
         JSON.stringify(student_file || null), 
         feedback || null, 
-        JSON.stringify(manual_marking || {})
+        JSON.stringify(manual_marking || {}),
+        show_score !== undefined ? show_score : true
       ]);
     res.status(201).json({ message: 'Result Saved' });
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.put('/api/results/:id', async (req, res) => {
-  const { status, score, correct_answers, feedback, manual_marking } = req.body;
+  const { status, score, correct_answers, feedback, manual_marking, show_score } = req.body;
   try {
-    await pool.execute('UPDATE results SET status = ?, score = ?, correct_answers = ?, feedback = ?, manual_marking = ? WHERE id = ?',
-      [status || 'pending', score || 0, correct_answers || 0, feedback || null, JSON.stringify(manual_marking || {}), req.params.id]);
+    await pool.execute('UPDATE results SET status = ?, score = ?, correct_answers = ?, feedback = ?, manual_marking = ?, show_score = ? WHERE id = ?',
+      [
+        status || 'pending', 
+        score || 0, 
+        correct_answers || 0, 
+        feedback || null, 
+        JSON.stringify(manual_marking || {}), 
+        show_score !== undefined ? show_score : true,
+        req.params.id
+      ]);
     res.json({ message: 'Result Updated' });
   } catch (error) { res.status(500).json({ message: error.message }); }
 });

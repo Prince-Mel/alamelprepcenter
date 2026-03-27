@@ -22,12 +22,19 @@ import {
   ChevronRight, 
   Clock,
   GraduationCap,
-  Search
+  Search,
+  ClipboardList,
+  CheckCircle,
+  Trophy,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
+import { Switch } from '@/components/ui/switch';
 import { 
   Dialog, 
   DialogContent, 
@@ -107,7 +114,11 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
   const [filteredAssessments, setFilteredAssessments] = useState<Assessment[]>([]);
   const [sidebarCollapsed] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
-  const [profileData, setProfileData] = useState({ name: user.name, id: user.id, password: user.password });
+  const [profileData, setProfileData] = useState({ 
+    name: user.name, 
+    id: user.id, 
+    password: user.password
+  });
   const [searchQuery, setSearchQuery] = useState('');
 
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<string[]>([]);
@@ -244,7 +255,12 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
 
   const handleUpdateProfile = async () => {
     try {
-      const updated = { ...user, name: profileData.name.toUpperCase(), password: profileData.password };
+      const updated = { 
+        ...user, 
+        name: profileData.name.toUpperCase(), 
+        password: profileData.password,
+        details: { ...user.details, showScores: profileData.showScores }
+      };
       const res = await fetch(`${API_URL}/api/students/${user.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -276,7 +292,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
               { id: 'home', icon: Home, label: 'Home' },
               { id: 'courses', icon: BookOpen, label: 'My Courses' },
               { id: 'calendar', icon: CalendarIcon, label: 'Calendar' },
-              { id: 'announcements', icon: Bell, label: 'Updates' },
+              { id: 'announcements', icon: Trophy, label: 'Results' },
               { id: 'settings', icon: Settings, label: 'Settings' }
             ]
             .filter(item => {
@@ -368,20 +384,67 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                   </Card>
 
                   <Card className="border-none shadow-xl rounded-3xl p-4">
-                    <CardHeader><CardTitle className="text-lg font-semibold flex items-center gap-2 uppercase tracking-tight"><Bell className="text-orange-500" /> Updates</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="text-lg font-semibold flex items-center gap-2 uppercase tracking-tight"><Trophy className="text-emerald-500" /> Recent Results</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
-                      {announcements.length > 0 ? announcements.slice(0, 5).map(ann => (
-                        <div key={ann.id} className="p-4 rounded-2xl bg-orange-50 border border-orange-100 flex gap-3">
-                          <Bell className="w-4 h-4 text-orange-500 flex-shrink-0 mt-1" />
-                          <div>
-                            <p className="text-xs text-gray-800 font-semibold">{ann.message}</p>
-                            <p className="text-[9px] text-orange-400 mt-1 uppercase font-semibold">{format(parseISO(ann.timestamp), 'PPp')}</p>
+                      {studentResults.length > 0 ? studentResults.slice(0, 5).map(res => (
+                        <div key={res.id} className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between group hover:bg-white hover:shadow-md transition-all cursor-pointer">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-emerald-500 shadow-sm group-hover:scale-110 transition-transform">
+                              <CheckCircle className="w-5 h-5" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-gray-800 font-bold uppercase tracking-tight line-clamp-1">{res.assessment_title}</p>
+                              <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{res.course_name}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            {profileData.showScores ? (
+                              <div className="text-right">
+                                {profileData.showScores ? (
+                                  <div className="text-right">
+                                    {res.show_score ? (
+                                      <>
+                                        <p className={cn(
+                                          "text-lg font-black tracking-tighter",
+                                          res.score >= 70 ? 'text-emerald-600' : res.score >= 50 ? 'text-blue-600' : 'text-rose-600'
+                                        )}>{res.score}%</p>
+                                        <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Grade</p>
+                                      </>
+                                    ) : (
+                                      <div className="flex flex-col items-end">
+                                        <div className="flex gap-0.5">
+                                          <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                                          <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                                          <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                                        </div>
+                                        <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest mt-1">Hidden</p>
+                                      </div>
+                                    )}
+                                  </div>                                ) : (
+                                  <div className="flex flex-col items-end">
+                                    <div className="flex gap-0.5">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                                      <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                                      <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
+                                    </div>
+                                    <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest mt-1">Hidden</p>
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="flex flex-col items-end">
+                                <div className="flex gap-0.5">
+                                  {[1, 2, 3].map(i => <div key={i} className="w-1.5 h-1.5 rounded-full bg-gray-200" />)}
+                                </div>
+                                <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest mt-1">Hidden</p>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )) : (
                         <div className="py-16 text-center">
-                          <Bell className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4">No Updates Have Been Posted yet</p>
+                          <Trophy className="w-12 h-12 text-gray-200 mx-auto mb-4" />
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest px-4">No Results Have Been Released yet</p>
                         </div>
                       )}
                     </CardContent>
@@ -483,35 +546,108 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
             )}
 
             {viewMode === 'assessment-list' && selectedCourse && (
-              <div className="space-y-6 animate-fade-in max-w-2xl mx-auto font-semibold">
-                <Button variant="ghost" onClick={() => setViewMode('materials')} className="text-gray-500 hover:text-blue-600 mb-4 font-semibold text-xs uppercase"><ChevronRight className="rotate-180 w-4 h-4 mr-2" /> Back</Button>
-                <h2 className="text-xl font-semibold text-gray-800 mb-6 flex items-center gap-3 uppercase tracking-tight">Available {selectedMaterial}s</h2>
-                <div className="grid gap-4">
-                  {filteredAssessments.map(asmt => (
-                    <Card key={asmt.id} className="p-6 rounded-3xl border-2 border-transparent hover:border-blue-500 shadow-lg transition-all">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-800 uppercase tracking-tight">{asmt.title}</h3>
-                          <div className="flex gap-4 mt-2">
-                            <span className="text-[10px] text-blue-600 uppercase flex items-center gap-1 font-semibold"><Clock className="w-3 h-3" /> {asmt.duration} mins</span>
-                            {asmt.end_date && <span className="text-[10px] text-red-500 uppercase flex items-center gap-1 font-semibold"><CalendarIcon className="w-3 h-3" /> Due {format(parseISO(asmt.end_date), 'MMM d, p')}</span>}
+              <div className="space-y-10 animate-fade-in max-w-5xl mx-auto font-arial">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div>
+                    <Button variant="ghost" onClick={() => setViewMode('materials')} className="text-gray-400 hover:text-blue-600 mb-4 font-black text-[10px] uppercase tracking-[0.2em] p-0 h-auto group">
+                      <ChevronRight className="rotate-180 w-4 h-4 mr-1 group-hover:-translate-x-1 transition-transform" /> Back to Materials
+                    </Button>
+                    <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight italic flex items-center gap-4">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-100">
+                        <ClipboardList className="w-6 h-6 text-white" />
+                      </div>
+                      Available {selectedMaterial}s
+                    </h2>
+                  </div>
+                  <div className="bg-blue-50 px-6 py-3 rounded-2xl border border-blue-100 flex items-center gap-3">
+                    <div className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
+                    <span className="text-blue-700 font-black text-xs uppercase tracking-widest">{filteredAssessments.length} Active Tasks</span>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {filteredAssessments.map((asmt, idx) => (
+                    <Card key={asmt.id} className="group overflow-hidden border-none shadow-xl hover:shadow-2xl transition-all duration-500 rounded-[40px] bg-white animate-slide-in-up" style={{ animationDelay: `${idx * 0.1}s` }}>
+                      <div className="h-4 bg-gradient-to-r from-blue-600 to-indigo-600" />
+                      <div className="p-8 lg:p-10">
+                        <div className="flex justify-between items-start mb-6">
+                          <Badge className="bg-blue-50 text-blue-600 border-none px-4 py-1.5 rounded-full font-black text-[9px] uppercase tracking-widest">
+                            {asmt.type}
+                          </Badge>
+                          <div className="flex gap-2">
+                             <Badge variant="outline" className="border-gray-100 text-gray-400 font-black text-[9px] uppercase tracking-widest">
+                               {asmt.mode.replace('_', ' ')}
+                             </Badge>
                           </div>
                         </div>
-                        <Button onClick={() => { setActiveAssessment(asmt); setViewMode('quiz'); }} className="bg-blue-600 hover:bg-blue-700 rounded-xl font-semibold text-xs uppercase tracking-widest shadow-lg px-6 h-10">Start Now</Button>
+
+                        <h3 className="text-2xl font-black text-gray-800 uppercase tracking-tight mb-4 group-hover:text-blue-600 transition-colors line-clamp-2">
+                          {asmt.title}
+                        </h3>
+
+                        <div className="space-y-4 mb-10">
+                          <div className="flex items-center gap-3 text-gray-500">
+                            <div className="w-10 h-10 rounded-xl bg-gray-50 flex items-center justify-center group-hover:bg-blue-50 transition-colors">
+                              <Clock className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div>
+                              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Time Limit</p>
+                              <p className="text-sm font-bold text-gray-700">{asmt.duration} Minutes</p>
+                            </div>
+                          </div>
+                          {asmt.end_date && (
+                            <div className="flex items-center gap-3 text-gray-500">
+                              <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center group-hover:bg-rose-100 transition-colors">
+                                <CalendarIcon className="w-5 h-5 text-rose-500" />
+                              </div>
+                              <div>
+                                <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Deadline</p>
+                                <p className="text-sm font-bold text-rose-600">{format(parseISO(asmt.end_date), 'MMM d, p')}</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <Button 
+                          onClick={() => { setActiveAssessment(asmt); setViewMode('quiz'); }} 
+                          className="w-full h-16 bg-gray-900 hover:bg-blue-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 group/btn"
+                        >
+                          Access Assessment <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-2 transition-transform" />
+                        </Button>
                       </div>
                     </Card>
                   ))}
+                  
+                  {filteredAssessments.length === 0 && (
+                    <div className="col-span-full py-20 text-center bg-gray-50 rounded-[40px] border-2 border-dashed border-gray-200">
+                      <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm">
+                        <CheckCircle className="w-10 h-10 text-emerald-500" />
+                      </div>
+                      <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight italic">All Clear!</h3>
+                      <p className="text-gray-500 font-bold text-sm uppercase tracking-widest mt-2">No pending {selectedMaterial}s for this course.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
-            {viewMode === 'quiz' && activeAssessment && selectedCourse && (
-              <div className="fixed inset-0 z-[100] bg-white font-semibold">
-                <QuizInterface assessment={activeAssessment} course={selectedCourse} onComplete={handleAssessmentComplete} onCancel={() => { setViewMode('materials'); setActiveAssessment(null); }} />
-              </div>
-            )}
+      {/* Quiz Overlay */}
+      {viewMode === 'quiz' && activeAssessment && selectedCourse && (
+        <div className="fixed inset-0 z-[100] bg-white font-semibold overflow-y-auto">
+          <QuizInterface 
+            assessment={activeAssessment} 
+            course={selectedCourse} 
+            onComplete={handleAssessmentComplete} 
+            onCancel={() => { 
+              setViewMode('materials'); 
+              setActiveAssessment(null); 
+            }} 
+          />
+        </div>
+      )}
 
-            {viewMode === 'calendar' && (
+      {/* Calendar View */}
+      {viewMode === 'calendar' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in font-arial">
                 <Card className="lg:col-span-1 rounded-3xl border-none shadow-xl p-6 bg-white">
                   <Calendar 
@@ -585,6 +721,20 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
             <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-widest font-semibold ml-1">Full Name</Label><Input value={profileData.name} onChange={e => setProfileData({...profileData, name: e.target.value})} className="h-11 rounded-xl border-2 font-semibold text-sm" /></div>
             <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-widest font-semibold ml-1">Identity ID</Label><Input value={profileData.id} disabled className="h-11 border-2 rounded-xl bg-gray-50 text-gray-400 font-semibold text-sm" /></div>
             <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-widest font-semibold ml-1">New Access Key</Label><Input type="password" value={profileData.password} onChange={e => setProfileData({...profileData, password: e.target.value})} className="h-11 rounded-xl border-2 font-semibold text-sm" /></div>
+            
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 mt-6">
+              <div className="space-y-0.5">
+                <Label className="text-xs font-black uppercase tracking-tight flex items-center gap-2">
+                  {profileData.showScores ? <Eye className="w-4 h-4 text-blue-600" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
+                  Score Visibility
+                </Label>
+                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-none">Show grades on dashboard</p>
+              </div>
+              <Switch 
+                checked={profileData.showScores} 
+                onCheckedChange={(checked) => setProfileData({...profileData, showScores: checked})} 
+              />
+            </div>
           </div>
           <DialogFooter className="mt-6 flex gap-3">
             <Button variant="outline" onClick={() => setShowProfileDialog(false)} className="flex-1 h-11 rounded-xl font-semibold text-xs uppercase tracking-widest">Cancel</Button>

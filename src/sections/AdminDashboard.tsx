@@ -234,6 +234,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   const [showMarkDialog, setShowMarkDialog] = useState(false);
   const [markingScore, setMarkingScore] = useState(0);
   const [markingStatus, setMarkingScoreStatus] = useState<'pending' | 'released'>('pending');
+  const [markingShowScore, setMarkingShowScore] = useState(true);
 
   const handleView = (item: UploadedMaterial) => {
     if (item.type === 'videos' && item.url) {
@@ -1342,7 +1343,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                       <TableCell className="text-center text-gray-500 uppercase text-[9px] tracking-wider font-semibold">{r.assessment_title}</TableCell>
                       <TableCell className="text-center font-semibold"><span className={`text-xl tracking-tight ${r.score >= 50 ? 'text-green-600' : 'text-red-600'}`}>{r.score}%</span></TableCell>
                       <TableCell className="text-center"><Badge variant="outline" className={`px-3 py-1 rounded-full text-[8px] uppercase tracking-widest font-semibold ${r.status === 'released' ? 'text-green-600 border-green-200 bg-green-50' : 'text-orange-600 border-orange-200 bg-orange-50'}`}>{r.status}</Badge></TableCell>
-                      <TableCell className="text-right px-8"><Button onClick={() => { setSelectedResult(r); setMarkingScore(r.score); setMarkingScoreStatus(r.status); setShowMarkDialog(true); }} className="bg-admin-seaBlue hover:bg-blue-700 text-white px-4 rounded-xl h-10 shadow-lg uppercase text-[9px] tracking-widest transition-all font-semibold">REVIEW</Button></TableCell>
+                      <TableCell className="text-right px-8"><Button onClick={() => { setSelectedResult(r); setMarkingScore(r.score); setMarkingScoreStatus(r.status); setMarkingShowScore(r.show_score ?? true); setShowMarkDialog(true); }} className="bg-admin-seaBlue hover:bg-blue-700 text-white px-4 rounded-xl h-10 shadow-lg uppercase text-[9px] tracking-widest transition-all font-semibold">REVIEW</Button></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
