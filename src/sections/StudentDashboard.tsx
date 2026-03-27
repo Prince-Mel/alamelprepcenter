@@ -259,7 +259,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
         ...user, 
         name: profileData.name.toUpperCase(), 
         password: profileData.password,
-        details: { ...user.details, showScores: profileData.showScores }
+        details: { ...user.details, showScores: res.show_score }
       };
       const res = await fetch(`${API_URL}/api/students/${user.id}`, {
         method: 'PUT',
@@ -398,9 +398,9 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                             </div>
                           </div>
                           <div className="text-right">
-                            {profileData.showScores ? (
+                            {res.show_score ? (
                               <div className="text-right">
-                                {profileData.showScores ? (
+                                {res.show_score ? (
                                   <div className="text-right">
                                     {res.show_score ? (
                                       <>
@@ -725,13 +725,13 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 mt-6">
               <div className="space-y-0.5">
                 <Label className="text-xs font-black uppercase tracking-tight flex items-center gap-2">
-                  {profileData.showScores ? <Eye className="w-4 h-4 text-blue-600" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
+                  {res.show_score ? <Eye className="w-4 h-4 text-blue-600" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
                   Score Visibility
                 </Label>
                 <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-none">Show grades on dashboard</p>
               </div>
               <Switch 
-                checked={profileData.showScores} 
+                checked={res.show_score} 
                 onCheckedChange={(checked) => setProfileData({...profileData, showScores: checked})} 
               />
             </div>
