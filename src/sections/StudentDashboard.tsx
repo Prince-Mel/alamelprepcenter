@@ -117,7 +117,8 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
   const [profileData, setProfileData] = useState({ 
     name: user.name, 
     id: user.id, 
-    password: user.password
+    password: user.password,
+    showScores: user.details?.showScores ?? true
   });
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -259,14 +260,14 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
         ...user, 
         name: profileData.name.toUpperCase(), 
         password: profileData.password,
-        details: { ...user.details, showScores: res.show_score }
+        details: { ...user.details, showScores: profileData.showScores }
       };
-      const res = await fetch(`${API_URL}/api/students/${user.id}`, {
+      const response = await fetch(`${API_URL}/api/students/${user.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updated)
       });
-      if (res.ok) {
+      if (response.ok) {
         onUpdateUser(updated, user.id);
         setShowProfileDialog(false);
         toast.success('Profile updated');
@@ -399,38 +400,13 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                           </div>
                           <div className="text-right">
                             {res.show_score ? (
-                              <div className="text-right">
-                                {res.show_score ? (
-                                  <div className="text-right">
-                                    {res.show_score ? (
-                                      <>
-                                        <p className={cn(
-                                          "text-lg font-black tracking-tighter",
-                                          res.score >= 70 ? 'text-emerald-600' : res.score >= 50 ? 'text-blue-600' : 'text-rose-600'
-                                        )}>{res.score}%</p>
-                                        <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Grade</p>
-                                      </>
-                                    ) : (
-                                      <div className="flex flex-col items-end">
-                                        <div className="flex gap-0.5">
-                                          <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                                          <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                                          <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                                        </div>
-                                        <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest mt-1">Hidden</p>
-                                      </div>
-                                    )}
-                                  </div>                                ) : (
-                                  <div className="flex flex-col items-end">
-                                    <div className="flex gap-0.5">
-                                      <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                                      <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                                      <div className="w-1.5 h-1.5 rounded-full bg-gray-200" />
-                                    </div>
-                                    <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest mt-1">Hidden</p>
-                                  </div>
-                                )}
-                              </div>
+                              <>
+                                <p className={cn(
+                                  "text-lg font-black tracking-tighter",
+                                  res.score >= 70 ? 'text-emerald-600' : res.score >= 50 ? 'text-blue-600' : 'text-rose-600'
+                                )}>{res.score}%</p>
+                                <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest">Grade</p>
+                              </>
                             ) : (
                               <div className="flex flex-col items-end">
                                 <div className="flex gap-0.5">
@@ -725,13 +701,13 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 mt-6">
               <div className="space-y-0.5">
                 <Label className="text-xs font-black uppercase tracking-tight flex items-center gap-2">
-                  {res.show_score ? <Eye className="w-4 h-4 text-blue-600" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
+                  {profileData.showScores ? <Eye className="w-4 h-4 text-blue-600" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
                   Score Visibility
                 </Label>
                 <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-none">Show grades on dashboard</p>
               </div>
               <Switch 
-                checked={res.show_score} 
+                checked={profileData.showScores} 
                 onCheckedChange={(checked) => setProfileData({...profileData, showScores: checked})} 
               />
             </div>
