@@ -71,6 +71,16 @@ module.exports = {
           cream: "#FFFDD0",
           aquamarine: "#7FFFD4",
           surface: "#FFFFFF",
+        },
+        neon: {
+          cyan: "#00f2ff",
+          pink: "#ff00e5",
+          purple: "#bc13fe",
+          yellow: "#fff200",
+          bg: "#050505",
+          card: "#0f111a",
+          border: "#1b1e2e",
+          accent: "#00f2ff",
         }
       },
       fontFamily: {
@@ -92,6 +102,10 @@ module.exports = {
         glass: "0 8px 32px 0 rgba(31, 38, 135, 0.15)",
         card: "0 4px 20px 0 rgba(0, 0, 0, 0.08)",
         glow: "0 0 20px rgba(0, 255, 194, 0.3)",
+        'neon-cyan': "0 0 10px rgba(0, 242, 255, 0.5)",
+        'neon-pink': "0 0 10px rgba(255, 0, 229, 0.5)",
+        'neon-purple': "0 0 10px rgba(188, 19, 254, 0.5)",
+        'neon-yellow': "0 0 10px rgba(255, 242, 0, 0.5)",
       },
       keyframes: {
         "accordion-down": {
