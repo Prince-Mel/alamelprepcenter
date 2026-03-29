@@ -20,6 +20,8 @@ import {
   Shield, 
   Menu, 
   ChevronRight, 
+  ChevronLeft,
+  X,
   Clock,
   GraduationCap,
   Search,
@@ -51,7 +53,7 @@ import { QuizInterface } from './QuizInterface';
 import { cn } from '@/lib/utils';
 import type { Student } from '../App';
 
-const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001`;
+const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`;
 
 interface StudentDashboardProps {
   user: Student;
@@ -112,7 +114,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialType | null>(null);
   const [activeAssessment, setActiveAssessment] = useState<Assessment | null>(null);
   const [filteredAssessments, setFilteredAssessments] = useState<Assessment[]>([]);
-  const [sidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
   const [profileData, setProfileData] = useState({ 
     name: user.name, 
@@ -281,11 +283,20 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
     <div className="min-h-screen flex bg-gray-50 relative overflow-x-hidden font-arial">
       {/* Sidebar */}
       <aside className={`fixed left-0 top-0 h-full bg-white shadow-xl z-50 transition-all duration-500 ${isMobile ? (mobileMenuOpen ? 'w-64 translate-x-0' : 'w-64 -translate-x-full') : (sidebarCollapsed ? 'w-20' : 'w-64')}`}>
-        <div className="h-20 flex items-center px-6 border-b">
-          <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center mr-3 shadow-md overflow-hidden border border-gray-100">
-            <img src="/favicon.png" alt="AlaMel Logo" className="w-full h-full object-cover rounded-lg scale-[1.5]" />
+        <div className="h-20 flex items-center justify-between px-6 border-b">
+          <div className="flex items-center">
+            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center mr-3 shadow-md overflow-hidden border border-gray-100">
+              <img src="/favicon.png" alt="AlaMel Logo" className="w-full h-full object-cover rounded-lg scale-[1.5]" />
+            </div>
+            {!sidebarCollapsed && <span className="text-lg text-gray-800 uppercase tracking-tight font-semibold">AlaMel</span>}
           </div>
-          {!sidebarCollapsed && <span className="text-lg text-gray-800 uppercase tracking-tight font-semibold">AlaMel</span>}
+          {isMobile ? (
+            <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(false)} className="text-gray-400"><X className="w-5 h-5" /></Button>
+          ) : (
+            <Button variant="ghost" size="icon" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="text-gray-400 hover:text-blue-600 hidden lg:flex">
+              {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+            </Button>
+          )}
         </div>
         <ScrollArea className="h-[calc(100vh-160px)] py-4">
           <div className="px-3 space-y-1">
@@ -293,7 +304,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
               { id: 'home', icon: Home, label: 'Home' },
               { id: 'courses', icon: BookOpen, label: 'My Courses' },
               { id: 'calendar', icon: CalendarIcon, label: 'Calendar' },
-              { id: 'announcements', icon: Trophy, label: 'Results' },
+              { id: 'announcements', icon: Bell, label: 'Updates' },
               { id: 'settings', icon: Settings, label: 'Settings' }
             ]
             .filter(item => {
