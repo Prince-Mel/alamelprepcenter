@@ -114,7 +114,7 @@ interface UploadedMaterial {
 
 export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser }: AdminDashboardProps) {
   const isMobile = useIsMobile();
-  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001`;
+  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const [courses, setCourses] = useState<Course[]>([]);
@@ -314,16 +314,28 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
 
   const handleUpdateResult = async () => {
     if (!selectedResult) return;
-    const res = await fetch(`${API_URL}/api/results/${selectedResult.id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        score: markingScore, 
-        status: markingStatus,
-        show_score: markingShowScore
-      })
-    });
-    if (res.ok) { fetchData(); setShowMarkDialog(false); toast.success('Result Updated'); }
+    try {
+      const res = await fetch(`${API_URL}/api/results/${selectedResult.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          score: markingScore, 
+          status: markingStatus,
+          show_score: markingShowScore
+        })
+      });
+      if (res.ok) { 
+        fetchData(); 
+        setShowMarkDialog(false); 
+        toast.success('Result Updated'); 
+      } else {
+        const errorData = await res.json();
+        toast.error(errorData.message || 'Update failed on server');
+      }
+    } catch (e) {
+      console.error('Update error:', e);
+      toast.error('Network error occurred during update');
+    }
   };
 
   const fetchData = async () => {
