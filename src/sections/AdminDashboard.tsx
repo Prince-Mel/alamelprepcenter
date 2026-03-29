@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { MultiSelect, type Option } from '@/components/ui/multi-select';
 import { toast } from 'sonner';
@@ -316,7 +317,11 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
     const res = await fetch(`${API_URL}/api/results/${selectedResult.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ score: markingScore, status: markingStatus })
+      body: JSON.stringify({ 
+        score: markingScore, 
+        status: markingStatus,
+        show_score: markingShowScore
+      })
     });
     if (res.ok) { fetchData(); setShowMarkDialog(false); toast.success('Result Updated'); }
   };
@@ -1556,15 +1561,23 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
               <Label className="text-[9px] uppercase text-gray-400 ml-1 font-semibold">Awarded Score (%)</Label>
               <Input type="number" value={markingScore} onChange={e => setMarkingScore(Number(e.target.value))} className="h-14 rounded-2xl border-2 text-xl text-center focus:border-admin-seaBlue transition-all shadow-inner font-semibold" />
             </div>
-            <div className="space-y-2">
-              <Label className="text-[9px] uppercase text-gray-400 ml-1 font-semibold">System Visibility</Label>
-              <Select value={markingStatus} onValueChange={(v: any) => setMarkingScoreStatus(v)}>
-                <SelectTrigger className="h-14 rounded-2xl border-2 text-xs font-semibold"><SelectValue /></SelectTrigger>
-                <SelectContent className="">
-                  <SelectItem value="pending" className="font-semibold">PENDING (HIDDEN)</SelectItem>
-                  <SelectItem value="released" className="font-semibold">RELEASED (VISIBLE)</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center justify-between p-6 bg-gray-50 rounded-[32px] border-2 border-dashed border-gray-200 mt-6">
+              <div className="space-y-1">
+                <Label className="text-xs font-black uppercase tracking-tight flex items-center gap-2">
+                  {markingStatus === 'released' ? <Eye className="w-4 h-4 text-admin-seaBlue" /> : <Shield className="w-4 h-4 text-gray-400" />}
+                  System Visibility
+                </Label>
+                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-none">
+                  {markingStatus === 'released' ? 'Released (Visible)' : 'Pending (Hidden)'}
+                </p>
+              </div>
+              <Switch 
+                checked={markingStatus === 'released'} 
+                onCheckedChange={(checked) => {
+                  setMarkingScoreStatus(checked ? 'released' : 'pending');
+                  setMarkingShowScore(checked);
+                }} 
+              />
             </div>
           </div>
           <DialogFooter className="mt-10"><Button onClick={handleUpdateResult} className="w-full bg-admin-seaBlue hover:bg-blue-700 text-white h-16 rounded-2xl shadow-xl uppercase tracking-widest text-xs transition-all hover:scale-[1.02] font-semibold">COMMIT ACADEMIC RECORD</Button></DialogFooter>
