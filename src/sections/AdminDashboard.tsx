@@ -736,7 +736,39 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
       </Dialog>
 
       <Dialog open={showMarkDialog} onOpenChange={setShowMarkDialog}>
-        <DialogContent className="rounded-[40px] max-w-md p-10 border border-neon-cyan/30 bg-neon-card backdrop-blur-2xl shadow-3xl font-inter"><div className="absolute top-0 left-0 w-full h-1 bg-neon-cyan shadow-[0_0_15px_#00f2ff]" /><DialogHeader className="mb-10 text-center"><DialogTitle className="text-xl uppercase text-white tracking-tighter font-black italic">Academic Review</DialogTitle></DialogHeader><div className="space-y-8"><div className="p-8 rounded-[32px] bg-black/40 border border-neon-border shadow-inner text-center"><p className="text-[9px] text-gray-500 uppercase font-black mb-3">Intelligence</p><p className="text-lg text-white uppercase font-black italic leading-none mb-2">{selectedResult?.student_name}</p><p className="text-[10px] text-neon-cyan uppercase font-black">{selectedResult?.assessment_title}</p></div><div className="space-y-3"><Label className="text-[10px] uppercase text-gray-500 ml-2 font-black">Score (%)</Label><Input type="number" value={markingScore} onChange={e => setMarkingScore(Number(e.target.value))} className="h-20 rounded-[32px] border-neon-border bg-black/60 text-4xl text-center text-white font-black italic" /></div><div className="flex items-center justify-between p-8 bg-black/40 rounded-[32px] border border-neon-border mt-8"><div className="space-y-1"><Label className="text-[10px] font-black uppercase flex items-center gap-3 text-white">{markingStatus === 'released' ? <Eye className="w-5 h-5 text-neon-cyan" /> : <Shield className="w-5 h-5 text-gray-500" />}Visibility</Label><p className="text-[9px] text-gray-500 font-black mt-1">{markingStatus === 'released' ? 'Released' : 'Pending'}</p></div><Switch checked={markingStatus === 'released'} onCheckedChange={(checked) => { setMarkingScoreStatus(checked ? 'released' : 'pending'); setMarkingShowScore(checked); }} /></div></div><DialogFooter className="mt-12"><Button onClick={handleUpdateResult} className="w-full bg-neon-cyan text-black h-16 rounded-[24px] shadow-lg uppercase tracking-[0.3em] text-[10px] font-black italic">COMMIT RECORD</Button></DialogFooter></DialogContent>
+        <DialogContent className="rounded-[32px] max-w-[360px] p-6 border border-neon-cyan/30 bg-neon-card backdrop-blur-2xl shadow-3xl font-inter">
+          <div className="absolute top-0 left-0 w-full h-1 bg-neon-cyan shadow-[0_0_15px_#00f2ff]" />
+          <DialogHeader className="mb-6 text-center">
+            <DialogTitle className="text-lg uppercase text-white tracking-tighter font-black italic">Academic Review</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-5 rounded-[24px] bg-black/40 border border-neon-border shadow-inner text-center">
+              <p className="text-[8px] text-gray-500 uppercase font-black mb-2">Intelligence</p>
+              <p className="text-base text-white uppercase font-black italic leading-none mb-1">{selectedResult?.student_name}</p>
+              <p className="text-[9px] text-neon-cyan uppercase font-black">{selectedResult?.assessment_title}</p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[9px] uppercase text-gray-500 ml-2 font-black">Score (%)</Label>
+              <Input type="number" value={markingScore} onChange={e => setMarkingScore(Number(e.target.value))} className="h-14 rounded-2xl border-neon-border bg-black/60 text-2xl text-center text-white font-black italic shadow-inner focus:border-neon-cyan" />
+            </div>
+            <div className="flex items-center justify-between p-5 bg-black/40 rounded-[24px] border border-neon-border">
+              <div className="space-y-0.5">
+                <Label className="text-[9px] font-black uppercase flex items-center gap-2 text-white">
+                  {markingStatus === 'released' ? <Eye className="w-4 h-4 text-neon-cyan" /> : <Shield className="w-4 h-4 text-gray-500" />}
+                  Visibility
+                </Label>
+                <p className="text-[8px] text-gray-500 font-black">{markingStatus === 'released' ? 'Released' : 'Pending'}</p>
+              </div>
+              <Switch 
+                checked={markingStatus === 'released'} 
+                onCheckedChange={(checked) => { setMarkingScoreStatus(checked ? 'released' : 'pending'); setMarkingShowScore(checked); }} 
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-8">
+            <Button onClick={handleUpdateResult} className="w-full bg-neon-cyan text-black h-12 rounded-xl shadow-lg uppercase tracking-[0.2em] text-[9px] transition-all hover:scale-105 font-black italic">COMMIT RECORD</Button>
+          </DialogFooter>
+        </DialogContent>
       </Dialog>
 
       <Dialog open={showAddCourseDialog} onOpenChange={(open) => { setShowAddCourseDialog(open); if (!open) { setSelectedCourseToEdit(null); setNewCourse({ id: '', name: '', code: '', instructor: '', color: 'from-blue-500 to-indigo-500', image: '/course-placeholder.svg' }); } }}>
