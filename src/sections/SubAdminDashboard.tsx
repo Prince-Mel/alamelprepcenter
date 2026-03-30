@@ -20,6 +20,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -55,7 +56,9 @@ import {
   CheckCircle,
   Eye,
   Activity as ActivityIcon,
-  Key
+  Key,
+  Filter,
+  X
 } from 'lucide-react';
 
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -102,7 +105,7 @@ interface UploadedMaterial {
 
 export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdminDashboardProps) {
   const isMobile = useIsMobile();
-  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001`;
+  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Core Data State
@@ -117,7 +120,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const [isDeploying, setIsDeploying] = useState(false);
 
   // UI State
-  const [sidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState('students');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -140,44 +143,8 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const [endDate, setEndDate] = useState('');
   const [assignedStudents, setAssignedStudents] = useState<string[]>([]);
 
-  const [studentToAssign, setStudentToAssign] = useState('');
-  const [courseToAssign, setCourseToAssign] = useState('');
-
-  const [showAddCourseDialog, setShowAddCourseDialog] = useState(false);
-  const [newCourse, setNewCourse] = useState({ id: '', name: '', code: '', instructor: '', color: 'from-blue-500 to-indigo-500', image: '/course-placeholder.svg' });
-
-  const handleAddCourse = async () => {
-    if (!newCourse.id || !newCourse.name || !newCourse.code) {
-      toast.error('Required fields missing');
-      return;
-    }
-    const res = await fetch(`${API_URL}/api/courses`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newCourse)
-    });
-    if (res.ok) {
-      fetchData();
-      setShowAddCourseDialog(false);
-      setNewCourse({ id: '', name: '', code: '', instructor: '', color: 'from-blue-500 to-indigo-500', image: '/course-placeholder.svg' });
-      toast.success('Course Created');
-    }
-  };
-
-  const handleDeleteCourse = async (id: string) => {
-    if (!confirm('Are you sure? This will also remove student enrollments for this course.')) return;
-    const res = await fetch(`${API_URL}/api/courses/${id}`, { method: 'DELETE' });
-    if (res.ok) { fetchData(); toast.success('Course Deleted'); }
-  };
-
-  // Material Upload
-  const [adminNewMaterialTitle, setAdminNewMaterialTitle] = useState('');
-  const [adminNewMaterialFile, setAdminNewMaterialFile] = useState<File | null>(null);
-  const [adminNewMaterialLink, setAdminNewMaterialLink] = useState('');
-  const [uploadMethod, setUploadMethod] = useState<'file' | 'link'>('file');
-  const [adminSelectedCourseId, setAdminSelectedCourseId] = useState('');
-  const [adminSelectedMaterialType, setAdminSelectedMaterialType] = useState<'textbooks' | 'videos' | 'pastQuestions'>('textbooks');
-  const [adminSelectedStudentIds, setAdminSelectedStudentIds] = useState<string[]>([]);
+  const [studentToAssign, setStudentToAssign] = useState<string[]>([]);
+  const [courseToAssign, setCourseToAssign] = useState<string[]>([]);
 
   const [newAssessmentQuestions, setNewAssessmentQuestions] = useState<any[]>([]);
   const [globalAssessmentMode, setGlobalAssessmentMode] = useState<'objective' | 'written' | 'integrated'>('objective');
@@ -281,45 +248,14 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
       toast.error('Student Name is required');
       return;
     }
-    
-    // Auto-generate ID if not provided manually
-    let finalId = newStudentId;
-    if (!finalId) {
-      finalId = 'STU' + Math.floor(1000 + Math.random() * 9000);
-    }
-    
-    // Default password if not provided
+    let finalId = newStudentId || 'STU' + Math.floor(1000 + Math.random() * 9000);
     const finalPassword = newStudentPassword || 'student123';
-
-    const student = { 
-      id: finalId.toUpperCase(), 
-      name: newStudentName.toUpperCase(), 
-      role: 'student', 
-      password: finalPassword, 
-      status: 'active', 
-      created_by: user.id 
-    };
+    const student = { id: finalId.toUpperCase(), name: newStudentName.toUpperCase(), role: 'student', password: finalPassword, status: 'active', created_by: user.id };
     try {
-      const res = await fetch(`${API_URL}/api/students`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify(student) 
-      });
-      if (res.ok) { 
-        fetchData(); 
-        setShowAddDialog(false); 
-        setNewStudentName('');
-        setNewStudentId('');
-        setNewStudentPassword('');
-        setGeneratedCredentials(null);
-        toast.success(`Student ${finalId} Created Successfully`); 
-      } else {
-        const errorData = await res.json();
-        toast.error(errorData.error || 'Failed to create student');
-      }
-    } catch (e) {
-      toast.error('Network error occurred');
-    }
+      const res = await fetch(`${API_URL}/api/students`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(student) });
+      if (res.ok) { fetchData(); setShowAddDialog(false); setNewStudentName(''); setNewStudentId(''); setNewStudentPassword(''); setGeneratedCredentials(null); toast.success(`Student ${finalId} Created Successfully`); }
+      else { const errorData = await res.json(); toast.error(errorData.error || 'Failed to create student'); }
+    } catch (e) { toast.error('Network error occurred'); }
   };
 
   const handleDeleteStudent = async () => {
@@ -331,406 +267,222 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const handleApproveRequest = async (req: any) => {
     const id = (req.role === 'student' ? 'STU' : 'ADM') + Math.floor(1000 + Math.random() * 8999);
     const pass = Math.floor(100000 + Math.random() * 899999).toString();
-    
-    const userData = { 
-      id, 
-      name: req.name, 
-      password: pass, 
-      role: req.role, 
-      status: 'active', 
-      email: req.email, 
-      contact: req.phone,
-      details: req.details,
-      created_by: user.id 
-    };
-
+    const userData = { id, name: req.name, password: pass, role: req.role, status: 'active', email: req.email, contact: req.phone, details: req.details, created_by: user.id };
     try {
       const endpoint = req.role === 'student' ? '/api/students' : '/api/subadmins';
-      const res = await fetch(`${API_URL}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(userData)
-      });
-
-      if (res.ok) {
-        await fetch(`${API_URL}/api/reg-requests/${req.id}`, { method: 'DELETE' });
-        fetchData();
-        toast.success(`Authorized as ${id}`);
-      }
-    } catch (e) {
-      toast.error('Authorization failed');
-    }
+      const res = await fetch(`${API_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(userData) });
+      if (res.ok) { await fetch(`${API_URL}/api/reg-requests/${req.id}`, { method: 'DELETE' }); fetchData(); toast.success(`Authorized as ${id}`); }
+    } catch (e) { toast.error('Authorization failed'); }
   };
 
   const handleRejectRequest = async (req: any) => {
-    try {
-      await fetch(`${API_URL}/api/reg-requests/${req.id}`, { method: 'DELETE' });
-      fetchData();
-      toast.error('Unauthorized and Removed');
-    } catch (e) {
-      toast.error('Action failed');
-    }
+    try { await fetch(`${API_URL}/api/reg-requests/${req.id}`, { method: 'DELETE' }); fetchData(); toast.error('Unauthorized and Removed'); }
+    catch (e) { toast.error('Action failed'); }
   };
 
   const handleCreateAssessment = async () => {
-    if (!selectedCourse) {
-      toast.error('Please select a target course');
-      return;
-    }
-    if (!assessmentTitle.trim()) {
-      toast.error('Please enter an assessment title');
-      return;
-    }
-    if (!endDate) {
-      toast.error('Please set a deadline for the assessment');
-      return;
-    }
-    if (newAssessmentQuestions.length === 0) {
-      toast.error('Please add at least one question to the assessment');
-      return;
-    }
-
+    if (!selectedCourse) { toast.error('Please select a target course'); return; }
+    if (!assessmentTitle.trim()) { toast.error('Please enter an assessment title'); return; }
+    if (!endDate) { toast.error('Please set a deadline for the assessment'); return; }
+    if (newAssessmentQuestions.length === 0) { toast.error('Please add at least one question to the assessment'); return; }
     setIsDeploying(true);
-    const config = { 
-      id: `ASMT${Date.now()}`, 
-      course_id: selectedCourse, 
-      type: 'quiz', 
-      title: assessmentTitle, 
-      mode: 'objectives', 
-      submission_mode: 'online', 
-      structured_questions: newAssessmentQuestions, 
-      duration, 
-      start_date: new Date().toISOString(), 
-      end_date: new Date(endDate).toISOString(), 
-      assigned_student_ids: assignedStudents 
-    };
-
+    const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: 'quiz', title: assessmentTitle, mode: 'objectives', submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
     try {
-      const res = await fetch(`${API_URL}/api/assessments`, { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify(config) 
-      });
-      
-      if (res.ok) { 
-        fetchData(); 
-        toast.success(`Assessment "${assessmentTitle}" published with ${newAssessmentQuestions.length} questions`);
-        setNewAssessmentQuestions([]);
-        setAssessmentTitle('');
-        setSelectedCourse('');
-        setEndDate('');
-        setAssignedStudents([]);
-      } else {
-        const errorData = await res.json();
-        toast.error(errorData.message || 'Failed to publish assessment');
-      }
-    } catch (e) {
-      console.error('Deployment error:', e);
-      toast.error('Network error: Could not reach the server');
-    } finally {
-      setIsDeploying(false);
-    }
+      const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+      if (res.ok) { fetchData(); toast.success(`Assessment "${assessmentTitle}" published`); setNewAssessmentQuestions([]); setAssessmentTitle(''); setSelectedCourse(''); setEndDate(''); setAssignedStudents([]); }
+      else { const errorData = await res.json(); toast.error(errorData.message || 'Failed to publish assessment'); }
+    } catch (e) { toast.error('Network error'); } finally { setIsDeploying(false); }
   };
 
   const handleAssignCourse = async () => {
-    if (!studentToAssign || !courseToAssign) return;
-    const res = await fetch(`${API_URL}/api/enrollments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ student_id: studentToAssign, course_id: courseToAssign }) });
-    if (res.ok) { fetchData(); toast.success('Assigned'); }
+    if (studentToAssign.length === 0 || courseToAssign.length === 0) { toast.error('Selection missing'); return; }
+    let successCount = 0;
+    for (const sId of studentToAssign) {
+      for (const cId of courseToAssign) {
+        const res = await fetch(`${API_URL}/api/enrollments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ student_id: sId, course_id: cId }) });
+        if (res.ok) successCount++;
+      }
+    }
+    fetchData();
+    toast.success(`Authorized for ${successCount} assignments`);
+    setStudentToAssign([]);
+    setCourseToAssign([]);
   };
 
+  // Material Upload
+  const [adminNewMaterialTitle, setAdminNewMaterialTitle] = useState('');
+  const [adminNewMaterialFile, setAdminNewMaterialFile] = useState<File | null>(null);
+  const [adminNewMaterialLink, setAdminNewMaterialLink] = useState('');
+  const [uploadMethod, setUploadMethod] = useState<'file' | 'link'>('file');
+  const [adminSelectedCourseId, setAdminSelectedCourseId] = useState('');
+  const [adminSelectedMaterialType, setAdminSelectedMaterialType] = useState<'textbooks' | 'videos' | 'pastQuestions'>('textbooks');
+  const [adminSelectedStudentIds, setAdminSelectedStudentIds] = useState<string[]>([]);
+
   const handleAdminUpload = async () => {
-    if (!adminNewMaterialTitle || !adminSelectedCourseId) {
-      toast.error('Title and Course selection are mandatory');
-      return;
-    }
-    if (uploadMethod === 'link' && !adminNewMaterialLink) {
-      toast.error('Asset Link is required');
-      return;
-    }
-
-    if (uploadMethod === 'file' && !adminNewMaterialFile) {
-      toast.error('Asset File is required');
-      return;
-    }
-    
+    if (!adminNewMaterialTitle || !adminSelectedCourseId) { toast.error('Required fields missing'); return; }
     const process = async (fileUrl?: string) => {
-      const mat = {
-        id: `MAT${Date.now()}`,
-        course_id: adminSelectedCourseId,
-        type: adminSelectedMaterialType,
-        title: adminNewMaterialTitle,
-        url: fileUrl || adminNewMaterialLink,
-        uploaded_by: user.name,
-        approved: true, 
-        date: new Date().toISOString().split('T')[0],
-        assigned_student_ids: adminSelectedStudentIds
-      };
-
+      const mat = { id: `MAT${Date.now()}`, course_id: adminSelectedCourseId, type: adminSelectedMaterialType, title: adminNewMaterialTitle, url: fileUrl || adminNewMaterialLink, uploaded_by: user.name, approved: true, date: new Date().toISOString().split('T')[0], assigned_student_ids: adminSelectedStudentIds };
       try {
-        const res = await fetch(`${API_URL}/api/materials`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(mat),
-        });
-        if (res.ok) {
-          fetchData();
-          setShowAdminUploadDialog(false);
-          toast.success('Asset Deployed');
-          setAdminNewMaterialTitle('');
-          setAdminNewMaterialLink('');
-          setAdminSelectedCourseId('');
-          setAdminSelectedStudentIds([]);
-          setAdminNewMaterialFile(null);
-          setUploadMethod('file');
-        } else {
-          toast.error('Deployment failed');
-        }
-      } catch (e) {
-        toast.error('Network Error');
-      }
+        const res = await fetch(`${API_URL}/api/materials`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mat) });
+        if (res.ok) { fetchData(); setShowAdminUploadDialog(false); toast.success('Asset Deployed'); setAdminNewMaterialTitle(''); setAdminNewMaterialLink(''); setAdminSelectedCourseId(''); setAdminSelectedStudentIds([]); setAdminNewMaterialFile(null); setUploadMethod('file'); }
+      } catch (e) { toast.error('Network Error'); }
     };
-
     if (uploadMethod === 'file' && adminNewMaterialFile) {
-      const formData = new FormData();
-      formData.append('file', adminNewMaterialFile);
-
-      try {
-        const uploadRes = await fetch(`${API_URL}/api/upload`, {
-          method: 'POST',
-          body: formData
-        });
-        if (!uploadRes.ok) throw new Error('Cloudinary Upload Failed');
-        const uploadData = await uploadRes.json();
-        process(uploadData.url);
-      } catch (err) {
-        toast.error('File upload failed');
-      }
-    } else {
-      process();
-    }
+      const formData = new FormData(); formData.append('file', adminNewMaterialFile);
+      try { const uploadRes = await fetch(`${API_URL}/api/upload`, { method: 'POST', body: formData }); if (!uploadRes.ok) throw new Error(); const uploadData = await uploadRes.json(); process(uploadData.url); }
+      catch (err) { toast.error('File upload failed'); }
+    } else process();
   };
 
   const handleView = (item: UploadedMaterial) => {
-    if (item.type === 'videos' && item.url) {
-      if (item.url.startsWith('data:video')) {
+    if (item.url) {
+      if (item.type === 'videos' && item.url.startsWith('data:video')) {
         const win = window.open('', '_blank');
-        if (win) {
-          win.document.write(`
-            <!DOCTYPE html>
-            <html>
-            <head>
-              <title>${item.title}</title>
-              <style>
-                body { margin: 0; background-color: #000; display: flex; justify-content: center; align-items: center; height: 100vh; }
-                video { max-width: 100%; max-height: 100%; }
-              </style>
-            </head>
-            <body>
-              <video controls autoplay src="${item.url}"></video>
-            </body>
-            </html>
-          `);
-          win.document.close();
-        }
-      } else {
-        window.open(item.url, '_blank');
-      }
-    } else if (item.url) {
-      const win = window.open();
-      if (win) {
-        if (item.url.startsWith('data:application/pdf')) {
-             win.document.write(`<iframe src="${item.url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
-        } else {
-             win.location.href = item.url;
-        }
-      }
-    } else {
-      toast.info('No content available to view.');
-    }
+        if (win) { win.document.write(`<html><body style="margin:0;background:#000;display:flex;justify-content:center;align-items:center;height:100vh;"><video controls autoplay src="${item.url}" style="max-width:100%;max-height:100%;"></video></body></html>`); win.document.close(); }
+      } else if (item.url.startsWith('data:application/pdf')) {
+        const win = window.open(); if (win) win.document.write(`<iframe src="${item.url}" frameborder="0" style="border:0;top:0;left:0;bottom:0;right:0;width:100%;height:100%;" allowfullscreen></iframe>`);
+      } else window.open(item.url, '_blank');
+    } else toast.info('No content available.');
   };
 
   const handleDownload = (item: UploadedMaterial) => {
-    if (!item.url && item.type !== 'videos') {
-      toast.error('No file data found for download.');
-      return;
-    }
-    if (item.type === 'videos') {
-      window.open(item.url, '_blank');
-      return;
-    }
-    const link = document.createElement('a');
-    link.href = item.url!;
-    link.download = item.title;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success('Download started.');
+    if (!item.url) { toast.error('No file found.'); return; }
+    if (item.type === 'videos') { window.open(item.url, '_blank'); return; }
+    const link = document.createElement('a'); link.href = item.url; link.download = item.title; document.body.appendChild(link); link.click(); document.body.removeChild(link); toast.success('Download started.');
   };
-
-  const sidebarItems = [
-    { icon: Users, label: 'Students', value: 'students' },
-    { icon: Shield, label: 'AC Center', value: 'ac-center' },
-    { icon: FolderLock, label: 'SCM Management', value: 'scm-management' },
-    { icon: Clock, label: 'Assessment', value: 'timer' },
-    { icon: CheckCircle, label: 'Results', value: 'results' },
-    { icon: ActivityIcon, label: 'Activity', value: 'activity' },
-    { icon: Key, label: 'ID Generator', value: 'generator' }
-  ];
 
   const getStatusBadge = (s: string) => {
-    const colors: any = { active: 'bg-green-500', inactive: 'bg-gray-400', suspended: 'bg-red-500' };
-    return <Badge className={cn(colors[s] || 'bg-blue-500', "font-semibold")}>{s.toUpperCase()}</Badge>;
+    const colors: any = { active: 'bg-green-500/20 text-green-400 border-green-500/50', inactive: 'bg-gray-500/20 text-gray-400 border-gray-500/50', suspended: 'bg-red-500/20 text-red-400 border-red-500/50' };
+    return <Badge className={cn(colors[s] || 'bg-neon-cyan/20 text-neon-cyan border-neon-cyan/50', "font-semibold border")}>{s.toUpperCase()}</Badge>;
   };
 
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-gray-50 text-blue-600 animate-pulse uppercase tracking-widest text-lg font-semibold">Sub-Admin System Sync...</div>;
+  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-neon-bg text-neon-cyan animate-pulse uppercase tracking-widest text-lg font-black shadow-[0_0_30px_rgba(0,242,255,0.2)]">Sub-Admin Syncing...</div>;
 
   return (
-    <div className="min-h-screen flex bg-gray-50 relative font-inter antialiased">
-      <aside className={`fixed left-0 top-0 h-full bg-blue-700 shadow-2xl z-50 transition-all duration-500 ${isMobile ? (mobileMenuOpen ? 'w-64 translate-x-0' : 'w-64 -translate-x-full') : (sidebarCollapsed ? 'w-20' : 'w-64')}`}>
-        <div className="h-24 flex items-center justify-center border-b border-white/10 bg-black/10">
-          <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center mr-3 shadow-2xl overflow-hidden border-2 border-white/20">
-            <img src="/favicon.png" alt="Logo" className="w-full h-full object-cover rounded-xl scale-[1.5]" />
-          </div> 
-          {!sidebarCollapsed && <span className="text-2xl text-white uppercase tracking-tighter font-black italic">AlaMel</span>}
+    <div className="min-h-screen flex bg-neon-bg relative overflow-x-hidden font-inter text-gray-300">
+      <aside className={`fixed left-0 top-0 h-full bg-[#080808] shadow-2xl z-50 transition-all duration-500 border-r border-neon-border/50 ${isMobile ? (mobileMenuOpen ? 'w-64 translate-x-0' : 'w-64 -translate-x-full') : (sidebarCollapsed ? 'w-20' : 'w-64')}`}>
+        <div className="h-20 flex items-center justify-center border-b border-neon-border/30 bg-black/40">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(0,242,255,0.3)] overflow-hidden border border-neon-cyan/20">
+              <img src="/favicon.png" alt="Logo" className="w-full h-full object-cover rounded-lg scale-[1.5]" />
+            </div>
+            {!sidebarCollapsed && <span className="text-lg text-white font-black uppercase tracking-tighter drop-shadow-[0_0_8px_rgba(0,242,255,0.5)]">AlaMel</span>}
+          </div>
         </div>
-        <ScrollArea className="flex-1 h-[calc(100vh-180px)] py-6">
-          <nav className="px-4 space-y-3">
-            {sidebarItems
-              .filter(item => {
-                if (user.status === 'suspended') return item.value === 'students';
-                return true;
-              })
-              .map(item => (
-              <button key={item.value} onClick={() => { setActiveTab(item.value); if(isMobile) setMobileMenuOpen(false); }} className={`w-full flex items-center gap-4 px-4 py-4 rounded-2xl transition-all duration-300 ${activeTab === item.value ? 'bg-white text-blue-700 shadow-[0_10px_20px_rgba(0,0,0,0.1)] scale-[1.02] font-bold' : 'text-white/70 hover:bg-white/10 hover:text-white font-medium'}`}>
-                <item.icon className={cn("w-5 h-5 flex-shrink-0 transition-transform", activeTab === item.value && "scale-110")} /> 
-                {!sidebarCollapsed && <span className="text-[11px] uppercase tracking-[0.1em]">{item.label}</span>}
+        <ScrollArea className="flex-1 h-[calc(100vh-180px)] py-4">
+          <nav className="px-3 space-y-2">
+            {[
+              { icon: Users, label: 'Students', value: 'students' },
+              { icon: GraduationCap, label: 'Registration', value: 'reg-requests', badge: regRequests.filter(r => r.role === 'student').length },
+              { icon: FolderLock, label: 'SCM', value: 'scm-management' },
+              { icon: Clock, label: 'Assessment', value: 'timer' },
+              { icon: CheckCircle, label: 'Results', value: 'results' },
+              { icon: ActivityIcon, label: 'Activity', value: 'activity' },
+              { icon: Key, label: 'Generator', value: 'generator' }
+            ]
+            .filter(item => { if (user.status === 'suspended') return item.value === 'students'; return true; })
+            .map(item => (
+              <button 
+                key={item.value} 
+                onClick={() => { setActiveTab(item.value); if(isMobile) setMobileMenuOpen(false); }} 
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all relative group ${activeTab === item.value ? 'bg-neon-cyan/10 text-neon-cyan shadow-[inset_0_0_15px_rgba(0,242,255,0.1)] border border-neon-cyan/30' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}
+              >
+                {activeTab === item.value && <div className="absolute left-0 w-1 h-6 bg-neon-cyan rounded-r-full shadow-[0_0_10px_#00f2ff]" />}
+                <div className="relative">
+                  <item.icon className={`w-5 h-5 flex-shrink-0 transition-colors ${activeTab === item.value ? 'text-neon-cyan' : 'group-hover:text-neon-cyan/70'}`} />
+                  {item.badge !== undefined && item.badge > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-neon-pink text-white text-[8px] font-bold w-4 h-4 flex items-center justify-center rounded-full animate-pulse shadow-[0_0_10px_#ff00e5]">
+                      {item.badge}
+                    </span>
+                  )}
+                </div>
+                {!sidebarCollapsed && <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>}
               </button>
             ))}
           </nav>
         </ScrollArea>
-        <div className="p-6 border-t border-white/10 bg-black/10">
-          <button onClick={onLogout} className="w-full flex items-center gap-4 p-4 text-white/80 hover:bg-red-500 hover:text-white transition-all duration-300 rounded-2xl group font-bold">
+        {!isMobile && <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="absolute -right-3 top-24 w-6 h-6 bg-[#121212] text-neon-cyan rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform border border-neon-border/50"><ChevronRight className={cn("w-4 h-4 transition-transform", !sidebarCollapsed && "rotate-180")} /></button>}
+        <div className="p-4 border-t border-neon-border/30 bg-black/20">
+          <button onClick={onLogout} className="w-full flex items-center gap-3 p-3 rounded-xl text-neon-pink/70 hover:bg-neon-pink/10 hover:text-neon-pink transition-all group border border-transparent hover:border-neon-pink/30">
             <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /> 
-            {!sidebarCollapsed && <span className="text-[11px] uppercase tracking-[0.1em]">Logout</span>}
+            {!sidebarCollapsed && <span className="text-[10px] font-black uppercase tracking-widest">Logout</span>}
           </button>
         </div>
       </aside>
 
       <main className={`flex-1 transition-all duration-500 ${isMobile ? 'ml-0' : (sidebarCollapsed ? 'ml-20' : 'ml-64')}`}>
-        <header className="h-24 bg-white/80 backdrop-blur-xl shadow-sm px-10 flex items-center justify-between sticky top-0 z-30 border-b border-gray-100">
-          <div className="flex items-center gap-6">
-            {isMobile && <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(true)} className="text-gray-900"><Menu className="w-7 h-7" /></Button>}
-            <h1 className="text-xl text-gray-900 uppercase tracking-tight font-black italic border-l-4 border-blue-600 pl-4">{activeTab === 'timer' ? 'Assessment' : activeTab.replace('-', ' ')}</h1>
+        <header className="h-20 bg-neon-bg/80 backdrop-blur-xl border-b border-neon-border/50 px-8 flex items-center justify-between sticky top-0 z-30 shadow-[0_4px_20px_rgba(0,0,0,0.4)]">
+          <div className="flex items-center gap-4">
+            {isMobile && <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(true)} className="text-neon-cyan"><Menu className="w-6 h-6" /></Button>}
+            <h1 className="text-sm font-black text-white uppercase tracking-[0.2em] drop-shadow-[0_0_10px_rgba(255,255,255,0.3)]">{activeTab === 'timer' ? 'Assessment' : activeTab.replace('-', ' ')}</h1>
           </div>
-          <div className="flex items-center gap-6">
-            <Button onClick={onSwitchToStudent} className="bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-[10px] px-8 h-12 font-black tracking-widest shadow-lg shadow-blue-200 transition-all hover:scale-105 active:scale-95">STUDENT VIEW</Button>
+          <div className="flex items-center gap-4">
+            <Button onClick={onSwitchToStudent} className="bg-transparent border border-neon-cyan text-neon-cyan hover:bg-neon-cyan hover:text-black rounded-xl text-[10px] font-black tracking-widest px-6 transition-all shadow-[0_0_15px_rgba(0,242,255,0.1)]">STUDENT VIEW</Button>
             <div className="flex items-center gap-3">
               <div className="text-right hidden sm:block">
-                <p className="text-[9px] text-blue-600 font-black uppercase tracking-widest leading-none">Sub-Admin</p>
-                <p className="text-sm font-bold text-gray-900">{user.name}</p>
+                <p className="text-[9px] text-neon-cyan font-black uppercase tracking-widest leading-none">Sub-Admin</p>
+                <p className="text-sm font-bold text-white">{user.name}</p>
               </div>
-              <Avatar className="h-12 w-12 border-2 border-blue-100 shadow-xl ring-2 ring-white hover:scale-110 transition-transform cursor-pointer">
-                <AvatarFallback className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white uppercase text-sm font-black italic">{user.name[0]}</AvatarFallback>
+              <Avatar className="cursor-pointer border-2 border-neon-cyan shadow-[0_0_15px_rgba(0,242,255,0.2)] hover:scale-105 transition-transform">
+                <AvatarFallback className="bg-neon-card text-neon-cyan uppercase text-xs font-black">{user.name[0]}</AvatarFallback>
               </Avatar>
             </div>
           </div>
         </header>
 
-        <div className="p-10 max-w-7xl mx-auto space-y-10 animate-fade-in">
+        <div className="p-8 max-w-7xl mx-auto space-y-8 animate-fade-in">
           {activeTab === 'students' && (
             <div className="space-y-8">
-              <Card className="rounded-[32px] p-8 border-none shadow-xl bg-white">
-                <CardTitle className="text-lg uppercase tracking-tight text-gray-800 mb-8 font-semibold">Enroll Students in Courses</CardTitle>
+              <Card className="rounded-[32px] p-8 border border-neon-border bg-neon-card shadow-2xl">
+                <CardTitle className="text-lg uppercase tracking-tight text-white mb-8 font-black italic">Authorize Module Access</CardTitle>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-end">
                   <div className="space-y-2">
-                    <Label className="text-[10px] text-gray-400 uppercase font-semibold">Identify Student Profile</Label>
-                    <MultiSelect 
-                      options={students.map(s => ({ label: `${s.name} (${s.id})`, value: s.id }))}
-                      selected={Array.isArray(studentToAssign) ? studentToAssign : studentToAssign ? [studentToAssign] : []}
-                      onChange={(val) => setStudentToAssign(val as any)}
-                      placeholder="Select Profiles"
-                    />
+                    <Label className="text-[10px] text-gray-500 uppercase tracking-widest font-black ml-1">Identify Profiles</Label>
+                    <MultiSelect options={students.map(s => ({ label: `${s.name} (${s.id})`, value: s.id }))} selected={studentToAssign} onChange={setStudentToAssign} placeholder="Select Identities" />
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-[10px] text-gray-400 uppercase font-semibold">Select Subject</Label>
-                    <MultiSelect 
-                      options={courses.map(c => ({ label: c.name, value: c.id }))}
-                      selected={Array.isArray(courseToAssign) ? courseToAssign : courseToAssign ? [courseToAssign] : []}
-                      onChange={(val) => setCourseToAssign(val as any)}
-                      placeholder="Select Subjects"
-                    />
+                    <Label className="text-[10px] text-gray-500 uppercase tracking-widest font-black ml-1">Select Modules</Label>
+                    <MultiSelect options={courses.map(c => ({ label: c.name, value: c.id }))} selected={courseToAssign} onChange={setCourseToAssign} placeholder="Select Subjects" />
                   </div>
-                  <Button onClick={async () => {
-                    const studentIds = Array.isArray(studentToAssign) ? studentToAssign : [studentToAssign];
-                    const course_ids = Array.isArray(courseToAssign) ? courseToAssign : [courseToAssign];
-                    if (studentIds.length === 0 || course_ids.length === 0) {
-                      toast.error('Please select at least one student and one subject');
-                      return;
-                    }
-                    let successCount = 0;
-                    for (const sId of studentIds) {
-                      for (const cId of course_ids) {
-                        const res = await fetch(`${API_URL}/api/enrollments`, { 
-                          method: 'POST', 
-                          headers: { 'Content-Type': 'application/json' }, 
-                          body: JSON.stringify({ student_id: sId, course_id: cId }) 
-                        });
-                        if (res.ok) successCount++;
-                      }
-                    }
-                    fetchData();
-                    toast.success(`Access Authorized for ${successCount} assignments`);
-                    setStudentToAssign([] as any);
-                    setCourseToAssign([] as any);
-                  }} className="h-12 bg-blue-600 text-white rounded-xl shadow-lg text-xs font-semibold uppercase tracking-widest transition-all hover:scale-105 active:scale-95">AUTHORIZE ACCESS</Button>
+                  <Button onClick={handleAssignCourse} className="h-14 bg-neon-cyan text-black rounded-2xl shadow-[0_0_20px_rgba(0,242,255,0.3)] text-[10px] font-black uppercase tracking-widest italic transition-all hover:scale-[1.02]">AUTHORIZE ENROLLMENT</Button>
                 </div>
               </Card>
 
               <div className="flex flex-col sm:flex-row justify-between items-center gap-6">
                 <div className="relative flex-1 max-w-md w-full">
-                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  <Input placeholder="Search student records..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-14 rounded-[20px] h-14 bg-white border-none shadow-lg text-sm font-bold placeholder:font-medium placeholder:text-gray-300 focus-visible:ring-2 focus-visible:ring-blue-500 transition-all" />
+                  <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-neon-cyan/50" />
+                  <Input placeholder="Search records..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-14 rounded-2xl h-14 bg-neon-card border-neon-border text-white font-bold focus-visible:ring-neon-cyan/50 shadow-inner" />
                 </div>
-                <Button 
-                  onClick={() => setShowAddDialog(true)} 
-                  disabled={user.status === 'suspended'}
-                  className="bg-blue-700 hover:bg-blue-800 text-white rounded-[20px] h-14 px-10 shadow-xl shadow-blue-100 text-[10px] font-black tracking-widest transition-all hover:scale-105 active:scale-95 disabled:opacity-50 w-full sm:w-auto"
-                >
-                  <Plus className="w-5 h-5 mr-3 stroke-[3px]" /> ADD STUDENT
-                </Button>
+                <Button onClick={() => setShowAddDialog(true)} disabled={user.status === 'suspended'} className="bg-neon-cyan text-black rounded-2xl h-14 px-10 shadow-[0_0_20px_rgba(0,242,255,0.2)] text-[10px] font-black tracking-widest uppercase italic hover:scale-105 disabled:opacity-30">ADD STUDENT</Button>
               </div>
 
-              <Card className="rounded-[40px] overflow-hidden border-none shadow-2xl bg-white/90 backdrop-blur-md">
+              <Card className="rounded-[40px] overflow-hidden border border-neon-border bg-neon-card/50 backdrop-blur-md shadow-2xl">
                 <Table>
-                  <TableHeader className="bg-gray-50/50">
-                    <TableRow className="border-b border-gray-100">
-                      <TableHead className="px-10 py-8 text-[10px] font-black uppercase tracking-widest text-gray-400">Identity Profile</TableHead>
-                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-gray-400 text-center">Status</TableHead>
-                      <TableHead className="text-right px-10 text-[10px] font-black uppercase tracking-widest text-gray-400">Control</TableHead>
+                  <TableHeader className="bg-black/40">
+                    <TableRow className="border-neon-border/50">
+                      <TableHead className="px-10 py-8 text-[10px] font-black uppercase tracking-widest text-neon-cyan">Identity Profile</TableHead>
+                      <TableHead className="text-[10px] font-black uppercase tracking-widest text-neon-cyan text-center">Status</TableHead>
+                      <TableHead className="text-right px-10 text-[10px] font-black uppercase tracking-widest text-neon-cyan">Control</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredStudents.map(s => (
-                      <TableRow key={s.id} className="hover:bg-blue-50/50 cursor-pointer border-b border-gray-50 transition-colors" onClick={() => { setSelectedStudent(s); setActiveTab('student-workspace'); }}>
+                      <TableRow key={s.id} className="hover:bg-neon-cyan/5 cursor-pointer border-neon-border/30 transition-colors group" onClick={() => { setSelectedStudent(s); setActiveTab('student-workspace'); }}>
                         <TableCell className="px-10 py-8">
                           <div className="flex items-center gap-5">
-                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 flex items-center justify-center text-blue-700 font-black text-lg shadow-inner border border-blue-100/50">
+                            <div className="w-14 h-14 rounded-2xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center text-neon-cyan font-black text-lg shadow-inner">
                               {s.id.slice(-2)}
                             </div>
                             <div>
-                              <p className="text-base font-black text-gray-900 tracking-tight">{s.name}</p>
-                              <p className="text-[11px] text-blue-600 font-black tracking-widest mt-0.5">{s.id}</p>
+                              <p className="text-base font-black text-white tracking-tight">{s.name}</p>
+                              <p className="text-[11px] text-neon-cyan/60 font-black tracking-widest group-hover:text-neon-cyan transition-colors">{s.id}</p>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-center">{getStatusBadge(s.status)}</TableCell>
                         <TableCell className="text-right px-10">
-                          {user.status === 'suspended' ? (
-                            <span className="text-[9px] text-gray-400 font-black uppercase tracking-[0.2em] bg-gray-100 px-4 py-2 rounded-full">Secure View</span>
-                          ) : (
-                            <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSelectedStudent(s); setShowDeleteDialog(true); }} className="text-red-500 hover:bg-red-50 hover:text-red-600 rounded-2xl h-12 w-12 transition-all">
-                              <Trash2 className="w-5 h-5 stroke-[2.5px]" />
-                            </Button>
+                          {user.status === 'suspended' ? <span className="text-[9px] text-gray-600 font-black uppercase tracking-widest">SECURE_VIEW</span> : (
+                            <Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSelectedStudent(s); setShowDeleteDialog(true); }} className="text-neon-pink/50 hover:text-neon-pink hover:bg-neon-pink/10 rounded-2xl h-12 w-12"><Trash2 className="w-5 h-5" /></Button>
                           )}
                         </TableCell>
                       </TableRow>
@@ -742,134 +494,81 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
           )}
 
           {activeTab === 'student-workspace' && selectedStudent && (
-            <div className="space-y-10 animate-fade-in">
-              <button onClick={() => setActiveTab('students')} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-600 hover:text-blue-800 transition-colors">
-                <ChevronLeft className="w-4 h-4" /> Back to student records
-              </button>
-
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-                <Card className="rounded-[40px] p-10 border-none shadow-2xl bg-blue-700 text-white relative overflow-hidden h-full">
-                  <img src="/favicon.png" className="absolute -right-10 -bottom-10 w-48 h-48 opacity-10 rotate-12 grayscale" />
+            <div className="space-y-8 animate-fade-in">
+              <button onClick={() => setActiveTab('students')} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neon-cyan hover:opacity-70 transition-all"><ChevronLeft className="w-4 h-4" /> BACK TO RECORDS</button>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <Card className="rounded-[32px] p-8 border border-neon-border bg-neon-cyan/5 text-white relative overflow-hidden h-full shadow-[inset_0_0_30px_rgba(0,242,255,0.05)]">
+                  <div className="absolute -right-10 -bottom-10 w-48 h-48 opacity-5 rotate-12 bg-neon-cyan rounded-full blur-3xl" />
                   <div className="relative z-10">
-                    <div className="w-20 h-20 rounded-3xl bg-white/10 backdrop-blur-xl border border-white/20 flex items-center justify-center text-3xl font-black italic shadow-2xl mb-8">{selectedStudent.name[0]}</div>
-                    <h2 className="text-3xl font-black italic tracking-tighter mb-1 uppercase leading-none">{selectedStudent.name}</h2>
-                    <p className="text-white/50 text-xs font-black tracking-widest mb-10 uppercase">{selectedStudent.id}</p>
-                    
+                    <div className="w-16 h-16 rounded-2xl bg-neon-cyan text-black flex items-center justify-center text-xl font-black shadow-[0_0_20px_rgba(0,242,255,0.4)] uppercase mb-6">{selectedStudent.name[0]}</div>
+                    <h2 className="text-2xl italic font-black tracking-tighter mb-1 uppercase leading-none">{selectedStudent.name}</h2>
+                    <p className="text-neon-cyan/60 text-[10px] uppercase tracking-[0.2em] mb-8 font-black">{selectedStudent.id}</p>
                     <div className="space-y-6">
-                      <div className="space-y-1"><p className="text-[9px] text-white/40 uppercase tracking-[0.2em] font-black">Access Credentials</p><p className="text-xl font-black tracking-tight">{selectedStudent.password}</p></div>
-                      <div className="grid grid-cols-1 gap-4">
-                        <div className="space-y-1">
-                          <p className="text-[9px] text-white/40 uppercase tracking-[0.2em] font-black">Contact Info</p>
-                          <p className="text-xs font-bold">{selectedStudent.email || 'NO_EMAIL_LINKED'}</p>
-                          <p className="text-xs font-bold">{selectedStudent.contact || 'NO_PHONE_LINKED'}</p>
-                        </div>
-                      </div>
-                      
-                      {(() => {
-                        let details: any = (selectedStudent as any).details;
-                        
-                        // Handle potential multiple layers of stringification
-                        for (let i = 0; i < 3; i++) {
-                          if (typeof details === 'string' && details.length > 0) {
-                            try {
-                              const parsed = JSON.parse(details);
-                              if (typeof parsed === 'object' || typeof parsed === 'string') {
-                                if (parsed === details) break;
-                                details = parsed;
-                              } else {
-                                break;
-                              }
-                            } catch (e) {
-                              break;
-                            }
-                          } else {
-                            break;
-                          }
-                        }
-                        
-                        if (!details || typeof details !== 'object') return null;
-
-                        return (
-                          <div className="pt-6 border-t border-white/10 space-y-6">
-                            <div className="grid grid-cols-2 gap-4">
-                              <div className="space-y-1"><p className="text-[9px] text-white/40 uppercase tracking-[0.2em] font-black">Education Level</p><p className="text-xs font-black uppercase">{details.educationLevel || details.level || 'N/A'}</p></div>
-                              <div className="space-y-1"><p className="text-[9px] text-white/40 uppercase tracking-[0.2em] font-black">Target Class</p><p className="text-xs font-black uppercase">{details.studentClass || details.class || 'N/A'}</p></div>
-                            </div>
-                            <div className="space-y-2">
-                              <p className="text-[9px] text-white/40 uppercase tracking-[0.2em] font-black">Subjects to Prepare</p>
-                              <div className="flex flex-wrap gap-2 mt-1">
-                                {Array.isArray(details.coursesToPrepare) ? details.coursesToPrepare.map((c: string) => (
-                                  <span key={c} className="text-[8px] bg-white/10 px-3 py-1 rounded-full font-black uppercase tracking-widest">{c}</span>
-                                )) : <span className="text-[8px] font-black text-white/40 uppercase tracking-widest">NONE_SPECIFIED</span>}
-                              </div>
+                      <div className="space-y-1"><p className="text-[8px] text-gray-500 uppercase tracking-widest font-black">ACCESS KEY</p><p className="text-xl font-black tracking-tight text-white">{selectedStudent.password}</p></div>
+                      <div className="space-y-1"><p className="text-[8px] text-gray-500 uppercase tracking-widest font-black">CONTACT INFO</p><p className="text-[10px] font-bold text-gray-300">{selectedStudent.email || 'N/A'}</p><p className="text-[10px] font-bold text-gray-300">{selectedStudent.contact || 'N/A'}</p></div>
+                      {selectedStudent.details && (
+                        <div className="pt-4 border-t border-neon-border/50 space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-1"><p className="text-[8px] text-gray-500 uppercase tracking-widest font-black">LEVEL</p><p className="text-[10px] font-bold uppercase text-gray-300">{selectedStudent.details.educationLevel || 'N/A'}</p></div>
+                            <div className="space-y-1"><p className="text-[8px] text-gray-500 uppercase tracking-widest font-black">CLASS</p><p className="text-[10px] font-bold uppercase text-gray-300">{selectedStudent.details.studentClass || 'N/A'}</p></div>
+                          </div>
+                          <div className="space-y-1">
+                            <p className="text-[8px] text-gray-500 uppercase tracking-widest font-black">MODULES</p>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {Array.isArray(selectedStudent.details.coursesToPrepare) ? selectedStudent.details.coursesToPrepare.map((c: string) => (
+                                <span key={c} className="text-[7px] bg-neon-cyan/10 text-neon-cyan px-2 py-0.5 rounded-full font-black uppercase border border-neon-cyan/20">{c}</span>
+                              )) : <span className="text-[10px] font-bold text-gray-600 uppercase">NONE</span>}
                             </div>
                           </div>
-                        );
-                      })()}
-                      <div className="space-y-2 pt-6 border-t border-white/10"><p className="text-[9px] text-white/40 uppercase tracking-[0.2em] font-black">System Status</p><div>{getStatusBadge(selectedStudent.status)}</div></div>
+                        </div>
+                      )}
+                      <div className="space-y-1 pt-4 border-t border-neon-border/50"><p className="text-[8px] text-gray-500 uppercase tracking-widest font-black">STATUS</p><div>{getStatusBadge(selectedStudent.status)}</div></div>
                     </div>
                   </div>
                 </Card>
 
-                <Card className="lg:col-span-2 rounded-[40px] p-10 border-none shadow-2xl bg-white relative h-full">
-                  <div className="flex justify-between items-center mb-10 pb-6 border-b border-gray-50">
-                    <div>
-                      <h3 className="text-xl font-black uppercase tracking-tight italic text-gray-900 leading-none">Assessment Analytics</h3>
-                      <p className="text-[9px] text-gray-400 uppercase tracking-[0.2em] mt-2 font-black">Live Performance Records</p>
-                    </div>
-                    <div className="flex gap-8">
-                      <div className="text-right"><p className="text-2xl font-black text-blue-600 tracking-tighter leading-none">{results.filter(r => r.student_id === selectedStudent.id).length}</p><p className="text-[9px] text-gray-400 uppercase font-black tracking-widest mt-1">SESSIONS</p></div>
-                      <div className="text-right pl-8 border-l-2 border-gray-50"><p className="text-2xl font-black text-green-600 tracking-tighter leading-none">{Math.round(results.filter(r => r.student_id === selectedStudent.id).reduce((acc, curr) => acc + curr.score, 0) / (results.filter(r => r.student_id === selectedStudent.id).length || 1))}%</p><p className="text-[9px] text-gray-400 uppercase font-black tracking-widest mt-1">AVG_SCORE</p></div>
+                <Card className="lg:col-span-2 rounded-[32px] p-8 border border-neon-border bg-neon-card/30 backdrop-blur-md shadow-2xl relative h-full">
+                  <div className="flex justify-between items-center mb-8 pb-6 border-b border-neon-border/50">
+                    <div><h3 className="text-xl italic font-black uppercase tracking-tight text-white">Performance Analytics</h3><p className="text-[9px] text-gray-500 uppercase tracking-[0.2em] mt-1 font-black">Live Assessment Intelligence</p></div>
+                    <div className="flex gap-6">
+                      <div className="text-right"><p className="text-2xl font-black text-neon-cyan tracking-tighter drop-shadow-[0_0_8px_rgba(0,242,255,0.4)]">{results.filter(r => r.student_id === selectedStudent.id).length}</p><p className="text-[8px] text-gray-500 uppercase font-black tracking-widest">SESSIONS</p></div>
+                      <div className="text-right pl-6 border-l border-neon-border/50"><p className="text-2xl font-black text-neon-pink tracking-tighter drop-shadow-[0_0_8px_rgba(255,0,229,0.4)]">{Math.round(results.filter(r => r.student_id === selectedStudent.id).reduce((acc, curr) => acc + curr.score, 0) / (results.filter(r => r.student_id === selectedStudent.id).length || 1))}%</p><p className="text-[8px] text-gray-500 uppercase font-black tracking-widest">AVG</p></div>
                     </div>
                   </div>
-                  
-                  <ScrollArea className="h-[400px] pr-6">
+                  <ScrollArea className="h-[350px] pr-4">
                     <Table>
-                      <TableHeader className="bg-gray-50/50">
-                        <TableRow className="border-none">
-                          <TableHead className="py-4 text-[9px] font-black uppercase tracking-[0.2em] text-gray-400">Target Assessment</TableHead>
-                          <TableHead className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 text-center">Outcome</TableHead>
-                          <TableHead className="text-[9px] font-black uppercase tracking-[0.2em] text-gray-400 text-right">Visibility</TableHead>
-                        </TableRow>
-                      </TableHeader>
+                      <TableHeader className="bg-black/40"><TableRow className="border-none"><TableHead className="py-4 text-[9px] font-black uppercase tracking-widest text-neon-cyan">Assessment</TableHead><TableHead className="text-[9px] font-black uppercase tracking-widest text-neon-cyan text-center">Score</TableHead><TableHead className="text-[9px] font-black uppercase tracking-widest text-neon-cyan text-right">State</TableHead></TableRow></TableHeader>
                       <TableBody>
                         {results.filter(r => r.student_id === selectedStudent.id).length > 0 ? (
                           results.filter(r => r.student_id === selectedStudent.id).map(r => (
-                            <TableRow key={r.id} className="border-b border-gray-50 hover:bg-blue-50/30 transition-colors">
-                              <TableCell className="py-6"><p className="text-gray-900 uppercase text-xs font-black tracking-tight">{r.assessment_title}</p><p className="text-[9px] text-blue-600 font-black tracking-widest mt-1">{r.course_name}</p></TableCell>
-                              <TableCell className="text-center"><span className={`text-xl font-black tracking-tighter ${r.score >= 50 ? 'text-green-600' : 'text-red-600'}`}>{r.score}%</span></TableCell>
-                              <TableCell className="text-right"><Badge className={`text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-xl shadow-lg shadow-blue-50 ${r.status === 'released' ? 'bg-green-500' : 'bg-orange-500'}`}>{r.status}</Badge></TableCell>
+                            <TableRow key={r.id} className="border-b border-neon-border/20 hover:bg-neon-cyan/5 transition-colors">
+                              <TableCell className="py-6"><p className="text-white uppercase text-xs font-black tracking-tight">{r.assessment_title}</p><p className="text-[9px] text-neon-cyan/60 font-black tracking-widest mt-1">{r.course_name}</p></TableCell>
+                              <TableCell className="text-center"><span className={cn("text-xl font-black tracking-tighter drop-shadow-[0_0_8px_rgba(255,255,255,0.1)]", r.score >= 50 ? 'text-neon-cyan' : 'text-neon-pink')}>{r.score}%</span></TableCell>
+                              <TableCell className="text-right"><Badge className={cn("text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-xl shadow-lg border", r.status === 'released' ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30' : 'bg-neon-yellow/10 text-neon-yellow border-neon-yellow/30')}>{r.status}</Badge></TableCell>
                             </TableRow>
                           ))
-                        ) : (
-                          <TableRow><TableCell colSpan={3} className="text-center py-24 text-gray-300 text-[10px] font-black uppercase tracking-[0.3em] italic">No Academic Records Identified</TableCell></TableRow>
-                        )}
+                        ) : <TableRow><TableCell colSpan={3} className="text-center py-24 text-gray-700 text-[10px] font-black uppercase tracking-[0.3em] italic">No Records Identified</TableCell></TableRow>}
                       </TableBody>
                     </Table>
                   </ScrollArea>
                 </Card>
               </div>
 
-              <Card className="rounded-[40px] p-10 border-none shadow-2xl bg-white relative overflow-hidden">
-                <BookUser className="absolute -right-10 -bottom-10 w-64 h-64 text-gray-50 -rotate-12" />
+              <Card className="rounded-[40px] p-8 border border-neon-border bg-neon-card relative overflow-hidden shadow-2xl">
+                <div className="absolute -right-20 -bottom-20 w-80 h-80 opacity-5 rotate-12 bg-neon-purple rounded-full blur-3xl" />
                 <div className="relative z-10">
-                  <h3 className="text-xl font-black uppercase tracking-tight italic text-gray-900 mb-8 border-l-8 border-blue-600 pl-6">Course Enrollment Map</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <h3 className="text-xl font-black uppercase tracking-tight italic text-white mb-8 border-l-8 border-neon-cyan pl-6">Enrollment Map</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {courses.filter(c => selectedStudent.courses?.includes(c.id)).map(c => (
-                      <div key={c.id} className="p-6 rounded-[32px] bg-gray-50/50 border-2 border-transparent hover:border-blue-600 hover:bg-white transition-all duration-300 flex justify-between items-center group shadow-sm">
-                        <div className="flex items-center gap-5">
-                          <div className="w-14 h-14 rounded-2xl bg-white shadow-xl flex items-center justify-center text-blue-700 font-black text-lg italic border border-gray-100">{c.code[0]}</div>
-                          <div>
-                            <p className="text-gray-900 uppercase font-black tracking-tight text-sm leading-tight mb-1">{c.name}</p>
-                            <p className="text-[10px] text-gray-400 font-black tracking-[0.2em]">{c.code}</p>
-                          </div>
+                      <div key={c.id} className={cn("p-6 rounded-[24px] transition-all flex justify-between items-center group w-full text-white shadow-xl border border-white/10 hover:border-white/30", c.color)}>
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-lg font-black italic shadow-inner border border-white/10">{c.code[0]}</div>
+                          <p className="uppercase tracking-widest text-sm font-black italic">{c.name}</p>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/enrollments/${selectedStudent.id}/${c.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-red-300 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-all hover:scale-110"><Trash2 className="w-5 h-5 stroke-[2.5px]" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/enrollments/${selectedStudent.id}/${c.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-white/50 hover:text-white opacity-0 group-hover:opacity-100 transition-all hover:scale-110"><Trash2 className="w-5 h-5" /></Button>
                       </div>
                     ))}
-                    {courses.filter(c => selectedStudent.courses?.includes(c.id)).length === 0 && (
-                      <div className="lg:col-span-3 h-40 rounded-[40px] border-2 border-dashed border-gray-100 flex items-center justify-center text-gray-300 uppercase text-[10px] font-black tracking-[0.3em] italic bg-gray-50/30">No Active Module Access Authorized</div>
-                    )}
+                    {courses.filter(c => selectedStudent.courses?.includes(c.id)).length === 0 && <div className="lg:col-span-3 h-32 rounded-[32px] border-2 border-dashed border-neon-border/50 flex items-center justify-center text-gray-700 uppercase text-[10px] font-black tracking-widest italic bg-black/20">Vault Empty</div>}
                   </div>
                 </div>
               </Card>
@@ -877,59 +576,40 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
           )}
 
           {activeTab === 'reg-requests' && (
-            <Card className="rounded-[32px] border-none shadow-2xl p-8 bg-white/80 backdrop-blur-sm overflow-hidden font-semibold">
-              <div className="flex justify-between items-center mb-8">
-                <div>
-                  <h2 className="text-xl uppercase tracking-tight text-gray-800 font-semibold">Registration Queue</h2>
-                  <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1 font-semibold">Review and Authorize Entry Requests</p>
-                </div>
-              </div>
+            <Card className="rounded-[32px] border border-neon-border shadow-2xl p-10 bg-neon-card/50 backdrop-blur-md overflow-hidden">
+              <CardTitle className="text-xl uppercase tracking-tighter text-white font-black italic mb-10">Registration Queue</CardTitle>
               <Table>
-                <TableHeader className="bg-gray-50/50 border-b-2">
-                  <TableRow>
-                    <TableHead className="px-8 py-6 text-gray-400 uppercase text-[10px] font-semibold">Candidate Profile</TableHead>
-                    <TableHead className="text-gray-400 uppercase text-[10px] text-center font-semibold">Identity Role</TableHead>
-                    <TableHead className="text-gray-400 uppercase text-[10px] text-center font-semibold">Academic Path</TableHead>
-                    <TableHead className="text-right px-8 text-gray-400 uppercase text-[10px] font-semibold">Decision</TableHead>
+                <TableHeader className="bg-black/40 border-b border-neon-border/50">
+                  <TableRow className="hover:bg-transparent">
+                    <TableHead className="px-8 py-6 text-neon-cyan uppercase text-[10px] font-black tracking-widest">Candidate</TableHead>
+                    <TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black tracking-widest">Academic Path</TableHead>
+                    <TableHead className="text-right px-8 text-neon-cyan uppercase text-[10px] font-black tracking-widest">Decision</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {regRequests.filter(r => r.role === 'student').map(r => (
-                    <TableRow key={r.id} className="border-b hover:bg-blue-50/50 transition-colors">
+                    <TableRow key={r.id} className="border-b border-neon-border/20 hover:bg-neon-cyan/5 transition-colors">
                       <TableCell className="px-8 py-8">
                         <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 text-lg font-semibold shadow-inner">{r.name[0]}</div>
-                          <div>
-                            <p className="text-lg text-gray-800 tracking-tight font-semibold leading-none mb-1">{r.name}</p>
-                            <p className="text-[10px] text-gray-400 font-semibold mb-1">{r.email}</p>
-                            <p className="text-[10px] text-blue-600 font-black tracking-widest uppercase">{r.phone}</p>
-                          </div>
+                          <div className="w-12 h-12 rounded-2xl bg-neon-cyan/10 border border-neon-cyan/30 flex items-center justify-center text-neon-cyan text-lg font-black">{r.name[0]}</div>
+                          <div><p className="text-lg text-white font-black leading-none mb-1">{r.name}</p><p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">{r.email}</p><p className="text-[10px] text-neon-cyan font-black tracking-widest uppercase">{r.phone}</p></div>
                         </div>
                       </TableCell>
                       <TableCell className="text-center">
-                        <Badge className="rounded-full px-4 py-1 text-[8px] font-black tracking-[0.1em] uppercase bg-blue-100 text-blue-700">
-                          {r.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-center">
                         <div className="inline-block text-left">
-                          <p className="text-[10px] text-gray-800 font-bold uppercase">{r.details?.educationLevel} • {r.details?.studentClass}</p>
-                          <div className="flex gap-1 mt-1">
-                            {r.details?.coursesToPrepare?.map((c: string) => (
-                              <span key={c} className="text-[7px] bg-gray-100 px-2 py-0.5 rounded-full text-gray-500 font-black uppercase">{c}</span>
-                            ))}
-                          </div>
+                          <p className="text-[10px] text-gray-300 font-black uppercase tracking-tight">{r.details?.educationLevel} • {r.details?.studentClass}</p>
+                          <div className="flex gap-1 mt-1">{r.details?.coursesToPrepare?.map((c: string) => <span key={c} className="text-[7px] bg-neon-cyan/10 text-neon-cyan/70 border border-neon-cyan/20 px-2 py-0.5 rounded-full font-black uppercase">{c}</span>)}</div>
                         </div>
                       </TableCell>
                       <TableCell className="text-right px-8">
                         <div className="flex justify-end gap-3">
-                          <Button onClick={() => handleApproveRequest(r)} className="bg-green-500 hover:bg-green-600 text-white px-8 rounded-2xl h-12 shadow-xl shadow-green-100 text-[10px] font-black tracking-widest transition-all hover:scale-105 active:scale-95 uppercase">Authorize</Button>
-                          <Button variant="ghost" onClick={() => handleRejectRequest(r)} className="text-red-400 hover:text-red-600 h-12 px-6 text-[10px] font-black tracking-widest uppercase rounded-2xl">Reject</Button>
+                          <Button onClick={() => handleApproveRequest(r)} className="bg-neon-cyan text-black px-8 rounded-2xl h-12 shadow-[0_0_20px_rgba(0,242,255,0.3)] text-[10px] font-black uppercase tracking-widest transition-all hover:scale-105 italic">AUTHORIZE</Button>
+                          <Button variant="ghost" onClick={() => handleRejectRequest(r)} className="text-gray-500 hover:text-neon-pink h-12 px-6 text-[10px] font-black tracking-widest uppercase rounded-2xl">REJECT</Button>
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
-                  {regRequests.length === 0 && <TableRow><TableCell colSpan={4} className="text-center py-20 text-gray-400 italic text-sm font-semibold">No pending requests</TableCell></TableRow>}
+                  {regRequests.length === 0 && <TableRow><TableCell colSpan={3} className="text-center py-24 text-gray-700 italic font-black uppercase tracking-widest">Vault Empty</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </Card>
@@ -938,201 +618,84 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
           {activeTab === 'timer' && (
             <div className="space-y-8 animate-fade-in">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
-                {/* Left: Configuration Card */}
-                <Card className="lg:col-span-1 rounded-[32px] p-8 border-none shadow-xl bg-white h-full">
-                  <CardHeader className="p-0 mb-8">
-                    <CardTitle className="text-lg uppercase font-semibold">Assessment Configuration</CardTitle>
-                    <CardDescription className="text-[10px] uppercase text-gray-400 font-semibold">Define module test parameters</CardDescription>
-                  </CardHeader>
+                <Card className="lg:col-span-1 rounded-[32px] p-8 border border-neon-border bg-neon-card h-full shadow-2xl">
+                  <CardHeader className="p-0 mb-8"><CardTitle className="text-lg uppercase font-black italic text-white tracking-tighter">Assessment Config</CardTitle><CardDescription className="text-[10px] uppercase text-gray-500 font-black tracking-widest">Define module parameters</CardDescription></CardHeader>
                   <div className="space-y-6">
-                    <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Target Course</Label><Select value={selectedCourse} onValueChange={setSelectedCourse}><SelectTrigger className="h-12 rounded-2xl border-2 font-semibold"><SelectValue placeholder="Select Module" /></SelectTrigger><SelectContent>{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-semibold">{c.name}</SelectItem>)}</SelectContent></Select></div>
-                    <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Assessment Title</Label><Input value={assessmentTitle} onChange={e => setAssessmentTitle(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold" /></div>
-                    <div className="grid grid-cols-1 gap-6">
-                      <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Deadline</Label><Input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold" /></div>
-                      <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Duration (Min)</Label><Input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} className="h-12 rounded-2xl border-2 font-semibold" /></div>
-                    </div>
-                    <div className="space-y-2"><Label className="text-[10px] text-gray-400 uppercase font-semibold">Assign To</Label><MultiSelect options={studentOptions} selected={assignedStudents} onChange={setAssignedStudents} placeholder="Select students..." /></div>
-                    
-                    <Button 
-                      onClick={handleCreateAssessment} 
-                      disabled={isDeploying}
-                      className="w-full bg-blue-600 text-white h-14 rounded-2xl shadow-lg uppercase transition-all text-xs font-black tracking-widest italic mt-4"
-                    >
-                      {isDeploying ? 'DEPLOYING...' : 'DEPLOY ASSESSMENT'}
-                    </Button>
+                    <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Course Target</Label><Select value={selectedCourse} onValueChange={setSelectedCourse}><SelectTrigger className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold"><SelectValue placeholder="Select Module" /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border">{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-bold text-gray-300 hover:text-neon-cyan">{c.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Assessment Title</Label><Input value={assessmentTitle} onChange={e => setAssessmentTitle(e.target.value)} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div>
+                    <div className="grid grid-cols-1 gap-6"><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Deadline</Label><Input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Duration (Min)</Label><Input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div></div>
+                    <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Assign To</Label><MultiSelect options={studentOptions} selected={assignedStudents} onChange={setAssignedStudents} placeholder="Select identities..." /></div>
+                    <Button onClick={handleCreateAssessment} disabled={isDeploying} className="w-full bg-neon-cyan text-black h-14 rounded-2xl shadow-[0_0_20px_rgba(0,242,255,0.3)] uppercase transition-all text-[10px] font-black tracking-widest italic mt-4 hover:scale-[1.02]">{isDeploying ? 'DEPLOYING...' : 'DEPLOY ASSESSMENT'}</Button>
                   </div>
                 </Card>
 
-                {/* Right: Questions Builder Card (Replacement) */}
-                <Card className="lg:col-span-2 rounded-[32px] p-8 border-none shadow-xl bg-white h-full min-h-[600px]">
-                  <div className="flex justify-between items-center mb-8 pb-4 border-b">
-                    <div>
-                      <CardTitle className="text-lg uppercase font-semibold">Questions</CardTitle>
-                      <CardDescription className="text-[10px] uppercase text-gray-400 font-semibold">Build assessment content ({newAssessmentQuestions.length} added)</CardDescription>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <Label className="text-[10px] uppercase text-gray-400 font-black">Assessment Mode:</Label>
-                      <Select value={globalAssessmentMode} onValueChange={handleGlobalModeChange}>
-                        <SelectTrigger className="h-10 w-48 rounded-2xl border-2 text-[10px] font-black uppercase tracking-widest shadow-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent className="rounded-2xl border-2">
-                          <SelectItem value="objective" className="font-bold text-[10px] uppercase">Objective (MCQ)</SelectItem>
-                          <SelectItem value="written" className="font-bold text-[10px] uppercase">Written (Essay)</SelectItem>
-                          <SelectItem value="integrated" className="font-bold text-[10px] uppercase">Integrated (Mixed)</SelectItem>
-                        </SelectContent>
-                      </Select>
+                <Card className="lg:col-span-2 rounded-[32px] p-8 border border-neon-border bg-neon-card/50 backdrop-blur-md shadow-2xl h-full min-h-[600px]">
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8 pb-6 border-b border-neon-border/50">
+                    <div><CardTitle className="text-lg uppercase font-black italic text-white tracking-tighter">Questions Builder</CardTitle><CardDescription className="text-[10px] uppercase text-gray-500 font-black tracking-widest">{newAssessmentQuestions.length} units</CardDescription></div>
+                    <div className="flex items-center gap-3 bg-black/40 p-2 rounded-2xl border border-neon-border/50">
+                      <Label className="text-[8px] uppercase text-gray-500 font-black tracking-widest ml-2">Engine Mode:</Label>
+                      <Select value={globalAssessmentMode} onValueChange={handleGlobalModeChange}><SelectTrigger className="h-9 w-40 rounded-xl border-neon-cyan/30 bg-transparent text-[9px] font-black uppercase tracking-widest text-neon-cyan"><SelectValue /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border"><SelectItem value="objective" className="font-black text-[9px] uppercase tracking-widest text-gray-300">Objective</SelectItem><SelectItem value="written" className="font-black text-[9px] uppercase tracking-widest text-gray-300">Written</SelectItem><SelectItem value="integrated" className="font-black text-[9px] uppercase tracking-widest text-gray-300">Integrated</SelectItem></SelectContent></Select>
                     </div>
                   </div>
-
                   <ScrollArea className="h-[700px] pr-4">
                     <div className="space-y-8">
                       {newAssessmentQuestions.map((q, idx) => (
-                        <div key={q.id} className="p-6 rounded-3xl border-2 bg-gray-50/30 space-y-6 relative group">
-                          <Button variant="ghost" size="icon" onClick={() => removeQuestion(idx)} className="absolute top-4 right-4 h-10 w-10 rounded-full bg-red-50 text-red-500 opacity-0 group-hover:opacity-100 transition-all shadow-md">
-                            <Trash2 className="w-5 h-5" />
-                          </Button>
-                          
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest bg-white px-4 py-1.5 rounded-full border shadow-sm">Question {idx + 1}</span>
-                            <Badge variant="outline" className="text-[8px] font-black uppercase tracking-widest bg-white border-2">Mode: {q.type}</Badge>
-                          </div>
-
+                        <div key={q.id} className="p-6 rounded-[32px] border border-neon-border bg-black/20 space-y-6 relative group transition-all hover:border-neon-cyan/30">
+                          <Button variant="ghost" size="icon" onClick={() => removeQuestion(idx)} className="absolute top-4 right-4 h-10 w-10 rounded-full bg-neon-pink/10 text-neon-pink opacity-0 group-hover:opacity-100 transition-all border border-neon-pink/30"><Trash2 className="w-5 h-5" /></Button>
+                          <div className="flex justify-between items-center"><span className="text-[10px] font-black text-neon-cyan uppercase tracking-widest bg-neon-cyan/5 px-4 py-2 rounded-full border border-neon-cyan/20">Unit {idx + 1}</span><Badge className="text-[8px] font-black uppercase tracking-widest bg-black/60 border border-neon-border text-gray-400">Mode: {q.type}</Badge></div>
                           {q.type === 'integrated' && (
-                            <div className="flex bg-gray-100/50 p-1 rounded-2xl w-fit border shadow-inner">
-                              <button 
-                                onClick={() => updateQuestion(idx, 'activeTab', 'objective')}
-                                className={cn("px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", q.activeTab !== 'written' ? "bg-white text-blue-700 shadow-md" : "text-gray-400 hover:text-gray-600")}
-                              >MCQ COMPONENT</button>
-                              <button 
-                                onClick={() => updateQuestion(idx, 'activeTab', 'written')}
-                                className={cn("px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", q.activeTab === 'written' ? "bg-white text-blue-600 shadow-md" : "text-gray-400 hover:text-gray-600")}
-                              >WRITTEN COMPONENT</button>
+                            <div className="flex bg-black/60 p-1 rounded-2xl w-fit border border-neon-border/50">
+                              <button onClick={() => updateQuestion(idx, 'activeTab', 'objective')} className={cn("px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", q.activeTab !== 'written' ? "bg-neon-cyan text-black shadow-[0_0_15px_rgba(0,242,255,0.3)]" : "text-gray-600")}>MCQ UNIT</button>
+                              <button onClick={() => updateQuestion(idx, 'activeTab', 'written')} className={cn("px-6 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", q.activeTab === 'written' ? "bg-neon-cyan text-black shadow-[0_0_15px_rgba(0,242,255,0.3)]" : "text-gray-600")}>ESSAY UNIT</button>
                             </div>
                           )}
-
                           {((q.type === 'written') || (q.type === 'integrated' && q.activeTab === 'written')) && (
-                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                              <Label className="text-[10px] uppercase text-gray-400 font-bold ml-1">Question Prompt (Written Part)</Label>
-                              <Textarea 
-                                value={q.text} 
-                                onChange={e => updateQuestion(idx, 'text', e.target.value)} 
-                                className="min-h-[100px] rounded-2xl border-2 font-medium text-sm resize-none p-4" 
-                                placeholder="Type the essay question or context here..."
-                              />
-                            </div>
+                            <div className="space-y-3"><Label className="text-[9px] uppercase text-gray-500 font-black tracking-widest ml-1">Question Prompt</Label><Textarea value={q.text} onChange={e => updateQuestion(idx, 'text', e.target.value)} className="min-h-[120px] rounded-2xl border-neon-border bg-black/40 font-bold text-sm text-gray-200 resize-none p-5" placeholder="Define the academic enquiry..." /></div>
                           )}
-
                           {(q.type === 'written' || (q.type === 'integrated' && q.activeTab === 'written')) && (
-                            <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                              <Label className="text-[10px] uppercase text-blue-600 font-black ml-1">Model Answer / Marking Guide</Label>
-                              <Textarea 
-                                value={q.modelAnswer || ''} 
-                                onChange={e => updateQuestion(idx, 'modelAnswer', e.target.value)} 
-                                className="min-h-[80px] rounded-2xl border-2 border-blue-100 bg-blue-50/20 font-medium text-xs resize-none p-4" 
-                                placeholder="Specify expected answer or keywords..."
-                              />
+                            <div className="space-y-3"><Label className="text-[9px] uppercase text-neon-cyan/70 font-black tracking-widest ml-1">Reference Solution</Label><Textarea value={q.modelAnswer || ''} onChange={e => updateQuestion(idx, 'modelAnswer', e.target.value)} className="min-h-[100px] rounded-2xl border-neon-cyan/20 bg-neon-cyan/5 font-bold text-xs text-neon-cyan/80 resize-none p-5" placeholder="Specify evaluation criteria..." /></div>
+                          )}
+                          {(q.type === 'objective' || (q.type === 'integrated' && q.activeTab !== 'written')) && (
+                            <div className="space-y-6">
+                              <div className="space-y-3"><Label className="text-[9px] uppercase text-gray-500 font-black tracking-widest ml-1">MCQ Prompt</Label><Textarea value={q.objectiveText || ''} onChange={e => updateQuestion(idx, 'objectiveText', e.target.value)} className="min-h-[120px] rounded-2xl border-neon-border bg-black/40 font-bold text-sm text-gray-200 resize-none p-5" placeholder="Formulate the enquiry..." /></div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {q.options.map((opt: string, optIdx: number) => (
+                                  <div key={optIdx} className="space-y-3">
+                                    <div className="flex items-center justify-between px-2"><Label className="text-[9px] uppercase text-gray-500 font-black tracking-widest">Option {String.fromCharCode(65 + optIdx)}</Label><div className="flex items-center gap-2 group/radio cursor-pointer" onClick={() => updateQuestion(idx, 'correctAnswer', optIdx)}><Label className="text-[8px] uppercase text-gray-500 font-black tracking-widest cursor-pointer group-hover/radio:text-neon-cyan transition-colors">Key?</Label><div className={cn("w-4 h-4 rounded-full border-2 transition-all flex items-center justify-center", q.correctAnswer === optIdx ? "border-neon-cyan bg-neon-cyan shadow-[0_0_10px_#00f2ff]" : "border-neon-border bg-black/40")}>{q.correctAnswer === optIdx && <div className="w-1.5 h-1.5 bg-black rounded-full" />}</div></div></div>
+                                    <Textarea value={opt} onChange={e => { const newOpts = [...q.options]; newOpts[optIdx] = e.target.value; updateQuestion(idx, 'options', newOpts); }} className={cn("min-h-[70px] rounded-2xl border-2 text-xs px-5 py-4 resize-none transition-all font-bold", q.correctAnswer === optIdx ? "border-neon-cyan/50 bg-neon-cyan/5 text-neon-cyan" : "border-neon-border bg-black/20 text-gray-400")} placeholder={`Option ${String.fromCharCode(65 + optIdx)}...`} />
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )}
-
-                          {(q.type === 'objective' || (q.type === 'integrated' && q.activeTab !== 'written')) && (
-                            <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                              <div className="space-y-2">
-                                <Label className="text-[10px] uppercase text-gray-400 font-bold ml-1">{q.type === 'integrated' ? 'MCQ Specific Question' : 'Question Prompt'}</Label>
-                                <Textarea 
-                                  value={q.objectiveText || ''} 
-                                  onChange={e => updateQuestion(idx, 'objectiveText', e.target.value)} 
-                                  className="min-h-[100px] rounded-2xl border-2 font-medium text-sm resize-none p-4" 
-                                  placeholder={q.type === 'integrated' ? "Type the specific question for these options..." : "Type the full question here..."}
-                                />
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {q.options.map((opt: string, optIdx: number) => (
-                                <div key={optIdx} className="space-y-2">
-                                  <div className="flex items-center justify-between px-1">
-                                    <Label className="text-[9px] uppercase text-gray-400 font-bold">Option {String.fromCharCode(65 + optIdx)}</Label>
-                                    <div className="flex items-center gap-2">
-                                      <Label className="text-[8px] uppercase text-gray-400 font-bold">Correct?</Label>
-                                      <input 
-                                        type="radio" 
-                                        name={`sub-correct-${q.id}`} 
-                                        checked={q.correctAnswer === optIdx} 
-                                        onChange={() => updateQuestion(idx, 'correctAnswer', optIdx)}
-                                        className="w-4 h-4 text-blue-600 accent-blue-600"
-                                      />
-                                    </div>
-                                  </div>
-                                  <Textarea 
-                                    value={opt} 
-                                    onChange={e => {
-                                      const newOpts = [...q.options];
-                                      newOpts[optIdx] = e.target.value;
-                                      updateQuestion(idx, 'options', newOpts);
-                                    }} 
-                                    className={cn("min-h-[60px] rounded-2xl border-2 text-xs px-4 py-3 resize-none transition-all", q.correctAnswer === optIdx ? "border-green-500 bg-green-50/30" : "bg-white")}
-                                    placeholder={`Option ${String.fromCharCode(65 + optIdx)} content...`}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-
-                      <div className="pt-4 flex justify-center">
-                        <Button 
-                          variant="outline" 
-                          onClick={addQuestion} 
-                          className="rounded-[20px] border-2 border-dashed border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white transition-all font-black uppercase tracking-widest px-12 h-14"
-                        >
-                          <Plus className="w-5 h-5 mr-3 stroke-[3px]" /> ADD NEW QUESTION
-                        </Button>
-                      </div>
-
-                      {newAssessmentQuestions.length === 0 && (
-                        <div className="h-[500px] border-4 border-dashed rounded-[40px] flex flex-col items-center justify-center text-gray-300 gap-4 bg-gray-50/50">
-                          <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center shadow-inner"><BookUser className="w-10 h-10 opacity-20" /></div>
-                          <p className="text-sm uppercase font-black tracking-[0.3em] italic opacity-30">No questions in workspace</p>
-                          <Button onClick={addQuestion} className="bg-blue-600 text-white rounded-xl px-8 h-12 shadow-lg">START BUILDING</Button>
                         </div>
-                      )}
+                      ))}
+                      <div className="pt-6 flex justify-center"><Button variant="outline" onClick={addQuestion} className="rounded-3xl border-2 border-dashed border-neon-cyan/30 bg-neon-cyan/5 text-neon-cyan hover:bg-neon-cyan hover:text-black transition-all font-black uppercase tracking-[0.2em] px-16 h-16"><Plus className="w-5 h-5 mr-3 stroke-[3px]" /> ADD NEW UNIT</Button></div>
+                      {newAssessmentQuestions.length === 0 && <div className="h-[500px] border border-dashed border-neon-border/50 rounded-[40px] flex flex-col items-center justify-center text-gray-700 gap-6 bg-black/20"><p className="text-[10px] uppercase font-black tracking-[0.4em] italic opacity-20">Engine Offline</p><Button onClick={addQuestion} className="bg-neon-cyan text-black rounded-2xl px-12 h-14 font-black tracking-widest shadow-[0_0_20px_rgba(0,242,255,0.2)]">INITIALIZE BUILDER</Button></div>}
                     </div>
                   </ScrollArea>
                 </Card>
               </div>
 
-              {/* Bottom: Active Assessments Management */}
-              <Card className="rounded-[40px] p-10 border-none shadow-2xl bg-blue-600 text-white overflow-hidden relative">
-                <img src="/favicon.png" className="absolute -right-20 -bottom-20 w-80 h-80 opacity-10 rotate-12 grayscale" />
+              <Card className="rounded-[40px] p-10 border border-neon-border bg-neon-card/80 text-white overflow-hidden relative shadow-3xl">
+                <div className="absolute -right-20 -bottom-20 w-80 h-80 opacity-10 rotate-12 bg-neon-cyan rounded-full blur-3xl" />
                 <div className="relative z-10">
-                  <div className="flex justify-between items-center mb-10">
-                    <div>
-                      <h3 className="text-2xl font-black italic uppercase tracking-tighter">Active System Assessments</h3>
-                      <p className="text-[10px] text-white/50 uppercase tracking-[0.2em] font-black mt-1">Live Management Console</p>
-                    </div>
-                    <Badge variant="outline" className="text-white border-white/20 px-6 py-2 rounded-full text-xs font-black uppercase tracking-widest">{assessments.length} DEPLOYED</Badge>
+                  <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
+                    <div><h3 className="text-2xl font-black italic uppercase tracking-tighter">Active Assessments</h3><p className="text-[10px] text-gray-500 uppercase tracking-[0.3em] font-black mt-2">Live Console</p></div>
+                    <Badge className="bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/30 px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest">{assessments.length} DEPLOYED</Badge>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                     {assessments.map(a => (
-                      <div key={a.id} className="p-6 rounded-[32px] bg-white/10 backdrop-blur-md border border-white/20 flex justify-between items-center group shadow-2xl transition-all hover:bg-white/15">
+                      <div key={a.id} className="p-8 rounded-[32px] bg-black/40 backdrop-blur-md border border-neon-border/50 flex justify-between items-center group shadow-2xl transition-all hover:bg-neon-cyan/[0.03] hover:border-neon-cyan/30">
                         <div className="flex-1">
-                          <div className="flex items-center gap-3 mb-2">
-                            <Badge className="bg-white/20 text-white text-[9px] uppercase font-black px-3">{a.type}</Badge>
-                            <p className="text-[10px] text-blue-200 font-black uppercase tracking-widest">{courses.find(c => c.id === a.course_id)?.name}</p>
-                          </div>
-                          <p className="text-base font-black tracking-tight text-white line-clamp-1 mb-1">{a.title}</p>
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-1.5 text-white/40 text-[9px] font-black uppercase"><Clock className="w-3 h-3" /> {a.duration}M</div>
-                            <div className="flex items-center gap-1.5 text-white/40 text-[9px] font-black uppercase"><Users className="w-3 h-3" /> {a.assigned_student_ids?.length || 0}</div>
-                          </div>
+                          <div className="flex items-center gap-3 mb-3"><Badge className="bg-neon-purple/20 text-neon-purple border border-neon-purple/40 text-[9px] uppercase font-black px-3 py-1">{a.type}</Badge><p className="text-[9px] text-neon-cyan/70 font-black uppercase tracking-[0.2em]">{courses.find(c => c.id === a.course_id)?.name}</p></div>
+                          <p className="text-lg font-black tracking-tight text-white line-clamp-1 mb-2 italic uppercase">{a.title}</p>
+                          <div className="flex items-center gap-6"><div className="flex items-center gap-2 text-gray-500 text-[9px] font-black uppercase tracking-widest"><Clock className="w-3.5 h-3.5 text-neon-cyan/50" /> {a.duration}M</div><div className="flex items-center gap-2 text-gray-500 text-[9px] font-black uppercase tracking-widest"><Users className="w-3.5 h-3.5 text-neon-cyan/50" /> {a.assigned_student_ids?.length || 0}</div></div>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/assessments/${a.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-white/40 hover:text-red-400 hover:bg-red-500/10 transition-all ml-4 h-12 w-12 rounded-2xl"><Trash2 className="w-6 h-6" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/assessments/${a.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-gray-700 hover:text-neon-pink hover:bg-neon-pink/10 transition-all ml-4 h-14 w-14 rounded-2xl border border-transparent hover:border-neon-pink/30"><Trash2 className="w-6 h-6" /></Button>
                       </div>
                     ))}
-                    {assessments.length === 0 && (
-                      <div className="lg:col-span-3 h-40 border-2 border-dashed border-white/10 rounded-[40px] flex items-center justify-center text-white/20 uppercase text-[10px] font-black tracking-[0.3em] italic">
-                        No Active System Assessments Found
-                      </div>
-                    )}
+                    {assessments.length === 0 && <div className="lg:col-span-3 h-48 border-2 border-dashed border-neon-border/30 rounded-[40px] flex items-center justify-center text-gray-800 uppercase text-[10px] font-black tracking-[0.5em] italic bg-black/20">Vault Empty</div>}
                   </div>
                 </div>
               </Card>
@@ -1140,14 +703,17 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
           )}
 
           {activeTab === 'scm-management' && (
-            <Card className="rounded-[32px] p-8 border-none shadow-xl bg-white">
-              <div className="flex justify-between items-center mb-8"><CardTitle className="text-lg uppercase tracking-tight font-semibold">SCM MANAGEMENT REPOSITORY</CardTitle><Button onClick={() => setShowAdminUploadDialog(true)} className="bg-blue-600 text-white rounded-2xl px-6 h-10 text-xs font-semibold shadow-lg"><Upload className="w-4 h-4 mr-2" /> UPLOAD NEW</Button></div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <Card className="rounded-[32px] p-10 border border-neon-border bg-neon-card/50 backdrop-blur-md shadow-2xl">
+              <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
+                <div><CardTitle className="text-2xl uppercase tracking-tighter text-white font-black italic">SCM Repository</CardTitle><p className="text-[10px] text-gray-500 uppercase tracking-[0.3em] font-black mt-2">Authorized Asset Management</p></div>
+                <Button onClick={() => setShowAdminUploadDialog(true)} className="bg-neon-cyan text-black rounded-2xl h-14 px-10 shadow-[0_0_20px_rgba(0,242,255,0.3)] hover:scale-105 transition-all text-[10px] font-black tracking-widest uppercase italic"><Upload className="w-5 h-5 mr-3" /> DEPLOY ASSET</Button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {uploadedMaterials.filter(m => m.uploaded_by === user.name || m.uploaded_by === user.id).map(m => (
-                  <Card key={m.id} className="rounded-3xl border shadow-lg p-6 group bg-gray-50/50">
-                    <div className="flex justify-between items-start mb-4"><div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center"><Files className="w-6 h-6" /></div><Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/materials/${m.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:text-red-600"><Trash2 className="w-4 h-4" /></Button></div>
-                    <h4 className="text-gray-800 text-base mb-1 font-semibold line-clamp-1">{m.title}</h4><p className="text-[10px] text-gray-400 uppercase mb-4 tracking-widest font-semibold">{m.type}</p>
-                    <div className="flex gap-2"><Button variant="outline" className="flex-1 rounded-xl h-10 text-xs font-semibold border-2 transition-all hover:bg-blue-50" onClick={() => handleView(m)}><Eye className="w-4 h-4 mr-2" /> VIEW</Button><Button variant="outline" size="icon" className="rounded-xl h-10 w-10 border-2 transition-all" onClick={() => handleDownload(m)}><Download className="w-4 h-4" /></Button></div>
+                  <Card key={m.id} className="rounded-[32px] border border-neon-border/50 shadow-xl p-8 group relative overflow-hidden bg-black/40 backdrop-blur-sm hover:border-neon-cyan/30 transition-all">
+                    <div className="flex justify-between items-start mb-6"><div className="w-14 h-14 rounded-2xl bg-neon-cyan/10 border border-neon-cyan/30 text-neon-cyan flex items-center justify-center shadow-[inset_0_0_15px_rgba(0,242,255,0.1)]"><Files className="w-7 h-7" /></div><Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/materials/${m.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:text-neon-pink h-9 w-9"><Trash2 className="w-4 h-4" /></Button></div>
+                    <h4 className="text-white text-base mb-1 line-clamp-1 font-black uppercase italic tracking-tight">{m.title}</h4><p className="text-[9px] text-gray-500 uppercase mb-6 tracking-[0.2em] font-black">{m.type}</p>
+                    <div className="flex gap-4"><Button variant="outline" className="flex-1 rounded-2xl h-12 text-[10px] font-black tracking-widest border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan hover:border-neon-cyan/50 transition-all uppercase italic" onClick={() => handleView(m)}><Eye className="w-4 h-4 mr-2" /> REVIEW</Button><Button variant="outline" size="icon" className="rounded-2xl h-12 w-12 border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan shadow-lg" onClick={() => handleDownload(m)}><Download className="w-4 h-4" /></Button></div>
                   </Card>
                 ))}
               </div>
@@ -1156,31 +722,42 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
 
           {activeTab === 'generator' && (
             <div className="max-w-xl mx-auto space-y-8 py-10 text-center animate-scale-in">
-              <Card className="rounded-[40px] border-none shadow-2xl p-10 bg-white relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-600 to-indigo-600" />
-                <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-inner"><RefreshCw className="w-8 h-8" /></div>
-                <h2 className="text-lg uppercase text-gray-800 mb-4 tracking-tight font-semibold">Token Generator</h2>
-                <div className="p-8 rounded-[24px] bg-gray-50 border-2 border-dashed border-gray-200 mb-8">
+              <Card className="rounded-[48px] border border-neon-border shadow-3xl p-12 bg-neon-card/80 backdrop-blur-xl relative overflow-hidden text-center">
+                <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-cyan via-neon-purple to-neon-pink" />
+                <div className="w-20 h-20 bg-neon-cyan/10 text-neon-cyan rounded-3xl flex items-center justify-center mx-auto mb-8 shadow-[0_0_30px_rgba(0,242,255,0.15)] border border-neon-cyan/20"><RefreshCw className="w-10 h-10" /></div>
+                <h2 className="text-2xl uppercase text-white mb-6 tracking-tighter font-black italic">Token Generator</h2>
+                <div className="p-10 rounded-[32px] bg-black/40 border-2 border-dashed border-neon-border/50 mb-10 shadow-inner">
                   {generatedCredentials ? (
-                    <div><p className="text-[8px] text-blue-600 uppercase tracking-widest mb-4 font-semibold">New Profile Tokens Ready</p><div className="grid grid-cols-2 gap-6 text-left"><div className="space-y-1"><p className="text-[8px] text-gray-400 uppercase tracking-widest font-semibold">SYSTEM ID</p><p className="text-xl text-gray-800 tracking-tight font-semibold">{generatedCredentials.id}</p></div><div className="space-y-1"><p className="text-[8px] text-gray-400 uppercase tracking-widest font-semibold">SECRET KEY</p><p className="text-xl text-gray-800 tracking-tight font-semibold">{generatedCredentials.password}</p></div></div></div>
-                  ) : <p className="text-gray-400 uppercase tracking-widest italic opacity-50 py-8 text-center text-xs font-semibold">Engine Standby...</p>}
+                    <div className="space-y-6">
+                      <p className="text-[10px] text-neon-cyan font-black uppercase tracking-[0.4em] mb-6 drop-shadow-[0_0_8px_rgba(0,242,255,0.4)]">Master Tokens Ready</p>
+                      <div className="grid grid-cols-1 gap-8 text-center">
+                        <div className="space-y-2"><p className="text-[9px] text-gray-500 uppercase tracking-widest font-black">System Identity</p><p className="text-3xl text-white tracking-tighter font-black">{generatedCredentials.id}</p></div>
+                        <div className="h-px bg-neon-border/50 w-24 mx-auto" />
+                        <div className="space-y-2"><p className="text-[9px] text-gray-400 uppercase tracking-widest font-black">Secret Access Key</p><p className="text-3xl text-neon-pink tracking-tighter font-black drop-shadow-[0_0_12px_rgba(255,0,229,0.4)]">{generatedCredentials.password}</p></div>
+                      </div>
+                    </div>
+                  ) : <div className="py-12 flex flex-col items-center gap-4 opacity-20"><div className="w-2 h-2 bg-neon-cyan rounded-full animate-ping" /><p className="text-gray-400 uppercase tracking-[0.5em] italic text-[10px] font-black">Engine Standby...</p></div>}
                 </div>
-                <Button onClick={() => { const id = 'STU' + Math.floor(1000 + Math.random() * 9000); const pass = Math.floor(100000 + Math.random() * 900000).toString(); setGeneratedCredentials({ id, password: pass }); setNewStudentId(id); setNewStudentPassword(pass); toast.success('Tokens Generated'); }} className="w-full bg-blue-600 hover:bg-blue-700 text-white h-16 rounded-2xl shadow-xl text-sm uppercase tracking-widest transition-all font-semibold">EXECUTE ENGINE</Button>
+                <Button onClick={() => { const id = 'STU' + Math.floor(1000 + Math.random() * 9000); const pass = Math.floor(100000 + Math.random() * 900000).toString(); setGeneratedCredentials({ id, password: pass }); setNewStudentId(id); setNewStudentPassword(pass); toast.success('Tokens Generated'); }} className="w-full bg-neon-cyan text-black h-20 rounded-[28px] shadow-[0_0_30px_rgba(0,242,255,0.3)] text-xs uppercase tracking-[0.3em] transition-all font-black italic hover:scale-[1.02] active:scale-[0.98]">EXECUTE ENGINE</Button>
               </Card>
             </div>
           )}
 
           {activeTab === 'results' && (
-            <Card className="rounded-[32px] border-none shadow-xl p-8 bg-white overflow-hidden">
+            <Card className="rounded-[32px] border border-neon-border shadow-2xl p-10 bg-neon-card/50 backdrop-blur-md overflow-hidden">
+              <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
+                <div><h2 className="text-2xl uppercase tracking-tighter text-white font-black italic">Academic Intelligence</h2><p className="text-[10px] text-gray-500 uppercase tracking-[0.3em] font-black mt-2">Historical Records Console</p></div>
+                <Button variant="outline" className="rounded-2xl border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan hover:border-neon-cyan transition-all uppercase text-[10px] font-black h-12 px-8 tracking-widest italic shadow-lg"><Filter className="w-4 h-4 mr-3 text-neon-cyan/50" /> FILTER ENGINE</Button>
+              </div>
               <Table>
-                <TableHeader><TableRow><TableHead className="px-8 text-xs font-semibold uppercase">Student Profile</TableHead><TableHead className="text-xs font-semibold uppercase">Assessment Title</TableHead><TableHead className="text-xs font-semibold uppercase">Score</TableHead><TableHead className="text-right px-8 text-xs font-semibold uppercase">Status</TableHead></TableRow></TableHeader>
+                <TableHeader className="bg-black/40 border-b border-neon-border/50"><TableRow className="hover:bg-transparent"><TableHead className="px-8 py-6 text-neon-cyan uppercase text-[10px] font-black tracking-widest">Student Identity</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black tracking-widest">Assessment</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black tracking-widest">Outcome</TableHead><TableHead className="text-right px-8 text-neon-cyan uppercase text-[10px] font-black tracking-widest">Status</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {results.filter(r => myStudents.some(s => s.id === r.student_id)).map(r => (
-                    <TableRow key={r.id} className="hover:bg-gray-50 transition-colors">
-                      <TableCell className="px-8 py-6 flex items-center gap-4"><Avatar className="w-10 h-10"><AvatarFallback className="bg-blue-600 text-white font-semibold text-xs uppercase">{r.student_name?.[0] || 'S'}</AvatarFallback></Avatar><div><p className="text-gray-800 text-sm font-semibold">{r.student_name}</p><p className="text-[10px] text-gray-400 font-semibold uppercase tracking-widest">{r.student_id}</p></div></TableCell>
-                      <TableCell className="text-gray-500 text-sm font-semibold">{r.assessment_title}</TableCell>
-                      <TableCell><div className="flex items-center gap-3"><div className={`w-2 h-2 rounded-full ${r.score >= 50 ? 'bg-green-500' : 'bg-red-500'}`} /><span className="text-lg tracking-tight text-gray-800 font-semibold">{r.score}%</span></div></TableCell>
-                      <TableCell className="text-right px-8"><Badge variant="outline" className={`px-3 py-1 rounded-full text-[8px] uppercase font-semibold ${r.status === 'released' ? 'text-green-600 border-green-200 bg-green-50' : 'text-orange-600 border-orange-200 bg-orange-50'}`}>{r.status}</Badge></TableCell>
+                    <TableRow key={r.id} className="border-b border-neon-border/20 hover:bg-neon-cyan/5 transition-colors">
+                      <TableCell className="px-8 py-8"><div className="flex items-center gap-5"><Avatar className="w-12 h-12 border border-neon-cyan/30 shadow-lg ring-2 ring-black"><AvatarFallback className="bg-neon-card text-neon-cyan uppercase text-xs font-black italic">{r.student_name?.[0] || 'S'}</AvatarFallback></Avatar><div><p className="text-white text-base tracking-tight font-black italic uppercase leading-tight">{r.student_name}</p><p className="text-[10px] text-gray-500 tracking-[0.2em] font-black uppercase mt-1">{r.student_id}</p></div></div></TableCell>
+                      <TableCell className="text-center text-gray-300 uppercase text-[10px] tracking-widest font-black italic">{r.assessment_title}</TableCell>
+                      <TableCell className="text-center"><span className={cn("text-2xl font-black tracking-tighter italic", r.score >= 50 ? 'text-neon-cyan' : 'text-neon-pink')}>{r.score}%</span></TableCell>
+                      <TableCell className="text-right px-8"><Badge className={cn("px-5 py-2 rounded-full text-[9px] uppercase tracking-widest font-black border italic", r.status === 'released' ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30 shadow-[0_0_10px_rgba(0,242,255,0.1)]' : 'bg-neon-yellow/10 text-neon-yellow border-neon-yellow/30 shadow-[0_0_10px_rgba(255,242,0,0.1)]')}>{r.status}</Badge></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -1189,140 +766,78 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
           )}
 
           {activeTab === 'activity' && (
-            <Card className="rounded-[32px] border-none shadow-xl p-8 bg-white">
-              <CardTitle className="text-lg uppercase tracking-tight mb-8 font-semibold">System Audit Log</CardTitle>
-              <div className="space-y-4 max-w-3xl">
+            <Card className="rounded-[32px] border border-neon-border shadow-2xl p-10 bg-neon-card/50 backdrop-blur-md">
+              <CardTitle className="text-xl uppercase tracking-tighter mb-10 text-center text-white font-black italic">Sub-Audit Intelligence</CardTitle>
+              <div className="space-y-4 max-w-4xl mx-auto">
                 {activityLogs.map(log => (
-                  <div key={log.id} className="flex gap-4 p-4 rounded-2xl border bg-gray-50/50">
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center flex-shrink-0"><ActivityIcon className="w-5 h-5" /></div>
-                    <div>
-                      <p className="text-gray-800 text-sm font-semibold">{log.action}</p>
-                      <p className="text-xs text-gray-500 font-semibold">{log.details}</p>
-                      <p className="text-[8px] text-gray-400 mt-1 uppercase font-semibold tracking-widest">{new Date(log.timestamp).toLocaleString()}</p>
+                  <div key={log.id} className="flex items-center gap-6 p-5 rounded-[24px] border border-neon-border bg-black/40 hover:border-neon-cyan/30 transition-all shadow-xl group">
+                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-[inset_0_0_15px_rgba(0,0,0,0.2)] bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20"><ActivityIcon className="w-7 h-7" /></div>
+                    <div className="flex-1">
+                      <p className="font-black text-white uppercase italic tracking-tight mb-1">{log.action}</p>
+                      <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest line-clamp-1">{log.details}</p>
+                      <p className="text-[9px] text-gray-600 font-black uppercase tracking-widest mt-2">{new Date(log.timestamp).toLocaleString()}</p>
                     </div>
                   </div>
                 ))}
-                {activityLogs.length === 0 && <div className="text-center py-20 text-gray-400 italic text-sm">No activity recorded</div>}
+                {activityLogs.length === 0 && <div className="text-center py-20 text-gray-700 italic font-black uppercase tracking-widest">No local activity recorded</div>}
               </div>
             </Card>
           )}
         </div>
       </main>
 
+      {/* DIALOGS SECTION */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-        <DialogContent className="rounded-[32px] max-w-md p-10 bg-white">
-          <DialogHeader><DialogTitle className="text-lg font-semibold uppercase text-blue-600 tracking-tight">REGISTER IDENTITY</DialogTitle></DialogHeader>
-          <div className="space-y-6 py-8">
-            <div className="space-y-1.5"><Label className="text-[10px] text-gray-400 uppercase tracking-widest ml-1 font-semibold">Full Name</Label><Input value={newStudentName} onChange={e => setNewStudentName(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold" /></div>
-            <div className="space-y-1.5"><Label className="text-[10px] text-gray-400 uppercase tracking-widest ml-1 font-semibold">System ID</Label><div className="flex gap-2"><Input value={newStudentId} onChange={e => setNewStudentId(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold text-blue-600" /><Button variant="outline" onClick={() => setNewStudentId('STU'+Math.floor(100+Math.random()*900))} className="h-12 w-12 rounded-2xl"><RefreshCw className="w-4 h-4 text-blue-600" /></Button></div></div>
-            <div className="space-y-1.5"><Label className="text-[10px] text-gray-400 uppercase tracking-widest ml-1 font-semibold">Password</Label><Input value={newStudentPassword} onChange={e => setNewStudentPassword(e.target.value)} className="h-12 rounded-2xl border-2 font-semibold" placeholder="••••••••" /></div>
+        <DialogContent className="rounded-[40px] max-w-md p-10 border border-neon-cyan/30 shadow-3xl bg-neon-card backdrop-blur-2xl overflow-hidden font-inter">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-cyan to-neon-purple" />
+          <DialogHeader className="mb-10 text-center">
+            <DialogTitle className="text-xl uppercase text-white tracking-tighter font-black italic">Register Identity</DialogTitle>
+            <DialogDescription className="text-neon-cyan uppercase text-[9px] tracking-[0.3em] mt-2 text-center font-black drop-shadow-[0_0_5px_rgba(0,242,255,0.3)]">Authorize New Profile</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-8">
+            <div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase tracking-widest ml-1 font-black">Full Name</Label><Input value={newStudentName} onChange={e => setNewStudentName(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5 focus:border-neon-cyan transition-all shadow-inner" /></div>
+            <div className="space-y-2">
+              <Label className="text-[10px] text-gray-500 uppercase tracking-widest ml-1 font-black">Identity Token</Label>
+              <div className="flex gap-3">
+                <Input value={newStudentId} onChange={e => setNewStudentId(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-lg px-5 text-neon-cyan font-black flex-1 tracking-widest shadow-inner" />
+                <Button variant="outline" onClick={() => setNewStudentId('STU'+Math.floor(1000+Math.random()*9000))} className="h-14 w-14 rounded-2xl border-neon-border bg-black/40 hover:bg-neon-cyan/10 transition-all flex-shrink-0"><RefreshCw className="w-5 h-5 text-neon-cyan" /></Button>
+              </div>
+            </div>
+            <div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase tracking-widest ml-1 font-black">Secret Access Key</Label><Input value={newStudentPassword} onChange={e => setNewStudentPassword(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5 focus:border-neon-cyan transition-all shadow-inner" placeholder="••••••••" /></div>
           </div>
-          <DialogFooter><Button onClick={handleAddStudent} className="w-full bg-blue-600 hover:bg-blue-700 text-white h-14 rounded-2xl shadow-xl text-xs uppercase tracking-widest font-semibold">CREATE ACCOUNT</Button></DialogFooter>
+          <DialogFooter className="mt-12"><Button onClick={handleAddStudent} className="w-full bg-neon-cyan text-black h-16 rounded-[24px] shadow-[0_0_20px_rgba(0,242,255,0.2)] uppercase text-[10px] tracking-[0.2em] transition-all hover:scale-105 font-black italic">AUTHORIZE ENTRY</Button></DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent className="rounded-[32px] max-w-[320px] text-center p-8 bg-white shadow-3xl border-none sm:max-w-[320px]">
-          <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
-            <Trash2 className="w-6 h-6 text-red-500" />
-          </div>
-          <DialogTitle className="text-base font-semibold mb-2 uppercase tracking-tight text-gray-800 text-center">Confirm Deletion</DialogTitle>
-          <p className="text-gray-400 uppercase text-[8px] tracking-widest mb-8 text-center px-2 font-semibold">
-            This action is final and cannot be undone
-          </p>
-          <div className="flex flex-col gap-2 w-full">
-            <Button 
-              onClick={handleDeleteStudent} 
-              className="w-full bg-red-500 hover:bg-red-600 text-white h-10 rounded-xl shadow-lg text-[10px] uppercase tracking-widest transition-all font-semibold"
-            >
-              YES, DELETE
-            </Button>
-            <Button 
-              variant="ghost" 
-              onClick={() => setShowDeleteDialog(false)} 
-              className="w-full text-gray-400 h-10 rounded-xl uppercase text-[10px] tracking-widest hover:bg-gray-50 font-semibold"
-            >
-              Cancel
-            </Button>
+        <DialogContent className="rounded-[40px] max-w-[320px] text-center p-10 bg-neon-card border border-neon-pink/30 shadow-3xl overflow-hidden font-inter">
+          <div className="w-16 h-16 bg-neon-pink/10 rounded-full flex items-center justify-center mx-auto mb-8 shadow-[0_0_20px_rgba(255,0,229,0.2)] border border-neon-pink/30"><Trash2 className="w-8 h-8 text-neon-pink" /></div>
+          <DialogTitle className="text-xl italic font-black uppercase tracking-tight text-white mb-2">Delete Identity</DialogTitle>
+          <p className="text-gray-500 uppercase text-[9px] tracking-[0.3em] mb-10 font-black">This protocol is final</p>
+          <div className="flex flex-col gap-3">
+            <Button onClick={handleDeleteStudent} className="w-full bg-neon-pink text-white h-14 rounded-2xl shadow-xl text-[10px] font-black uppercase tracking-widest italic hover:bg-neon-pink/80 transition-all">EXECUTE TERMINATION</Button>
+            <Button variant="ghost" onClick={() => setShowDeleteDialog(false)} className="w-full text-gray-600 h-12 rounded-2xl uppercase text-[9px] font-black tracking-[0.2em] hover:text-white transition-colors">Abort Protocol</Button>
           </div>
         </DialogContent>
       </Dialog>
 
       <Dialog open={showAdminUploadDialog} onOpenChange={setShowAdminUploadDialog}>
-        <DialogContent className="rounded-[40px] max-w-lg p-10 border-none shadow-3xl bg-white"><DialogHeader className="mb-8"><DialogTitle className="text-lg font-semibold uppercase text-blue-600 tracking-tight text-center">SCM Deploy</DialogTitle></DialogHeader>
-          <div className="space-y-6">
-            <div className="space-y-1.5">
-              <Label className="text-[10px] uppercase text-gray-400 font-semibold ml-1">Target Course (Topic)</Label>
-              <Select value={adminSelectedCourseId} onValueChange={setAdminSelectedCourseId}>
-                <SelectTrigger className="h-12 rounded-xl border-2 font-semibold text-sm"><SelectValue placeholder="Select Course" /></SelectTrigger>
-                <SelectContent>
-                  {courses.length > 0 ? (
-                    courses.map(c => <SelectItem key={c.id} value={c.id} className="font-semibold">{c.name}</SelectItem>)
-                  ) : (
-                    <SelectItem value="none" disabled className="font-semibold text-gray-400">No courses available</SelectItem>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-[10px] uppercase text-gray-400 font-semibold ml-1">Material Type</Label>
-              <Select value={adminSelectedMaterialType} onValueChange={(v: any) => setAdminSelectedMaterialType(v)}>
-                <SelectTrigger className="h-12 rounded-xl border-2 font-semibold text-sm"><SelectValue placeholder="Select Type" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="textbooks" className="font-semibold">Textbook / Document</SelectItem>
-                  <SelectItem value="videos" className="font-semibold">Video Content</SelectItem>
-                  <SelectItem value="pastQuestions" className="font-semibold">Past Question</SelectItem>
-                </SelectContent>
-              </Select>
+        <DialogContent className="rounded-[40px] max-w-lg p-10 border border-neon-cyan/30 bg-neon-card shadow-3xl backdrop-blur-2xl overflow-hidden font-inter">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-cyan to-neon-purple shadow-[0_0_20px_rgba(0,242,255,0.2)]" />
+          <DialogHeader className="mb-10 text-center"><DialogTitle className="text-xl uppercase text-white tracking-tighter font-black italic">Asset Deployment</DialogTitle></DialogHeader>
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black tracking-widest ml-1">Module</Label><Select value={adminSelectedCourseId} onValueChange={setAdminSelectedCourseId}><SelectTrigger className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-black"><SelectValue placeholder="Target" /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border text-gray-300">{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-black uppercase text-[9px]">{c.name}</SelectItem>)}</SelectContent></Select></div>
+              <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black tracking-widest ml-1">Type</Label><Select value={adminSelectedMaterialType} onValueChange={(v: any) => setAdminSelectedMaterialType(v)}><SelectTrigger className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-black"><SelectValue /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border text-gray-300"><SelectItem value="textbooks" className="font-black uppercase text-[9px]">Textbook</SelectItem><SelectItem value="videos" className="font-black uppercase text-[9px]">Video Asset</SelectItem><SelectItem value="pastQuestions" className="font-black uppercase text-[9px]">Examination</SelectItem></SelectContent></Select></div>
             </div>
             {adminSelectedCourseId && (
-              <div className="space-y-1.5">
-                <Label className="text-[10px] uppercase text-gray-400 font-semibold ml-1">Assign to Students</Label>
-                {students.filter(s => s.courses && s.courses.includes(adminSelectedCourseId)).length > 0 ? (
-                  <>
-                    <MultiSelect 
-                      options={students.filter(s => s.courses && s.courses.includes(adminSelectedCourseId)).map(s => ({ label: s.name, value: s.id }))} 
-                      selected={adminSelectedStudentIds} 
-                      onChange={setAdminSelectedStudentIds} 
-                      placeholder="Select students (Optional)" 
-                    />
-                    <p className="text-[9px] text-gray-400 font-bold px-1">
-                      {students.filter(s => s.courses && s.courses.includes(adminSelectedCourseId)).length} Students Enrolled
-                    </p>
-                  </>
-                ) : (
-                  <div className="h-12 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center bg-gray-50 text-gray-400 text-[10px] font-bold uppercase tracking-widest">
-                    No Students Enrolled in this Course
-                  </div>
-                )}
-              </div>
+              <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black tracking-widest ml-1">Audience (Optional)</Label><div className="bg-black/40 rounded-2xl border border-neon-border p-1"><MultiSelect options={students.filter(s => s.courses && s.courses.includes(adminSelectedCourseId)).map(s => ({ label: s.name, value: s.id }))} selected={adminSelectedStudentIds} onChange={setAdminSelectedStudentIds} placeholder="Global Broadcast" /></div></div>
             )}
-            <div className="space-y-1.5"><Label className="text-[10px] uppercase text-gray-400 font-semibold ml-1">Content Title</Label><Input value={adminNewMaterialTitle} onChange={e => setAdminNewMaterialTitle(e.target.value)} className="h-12 rounded-xl border-2 font-semibold text-sm" /></div>
-            <div className="space-y-3">
-              <Label className="text-[10px] uppercase text-gray-400 font-semibold">Deployment Method</Label>
-              <div className="flex bg-gray-50 rounded-xl p-1 shadow-inner border-2">
-                <button 
-                  onClick={() => setUploadMethod('file')} 
-                  className={cn("flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", uploadMethod === 'file' ? "bg-white text-blue-600 shadow-sm" : "text-gray-400 hover:bg-white/50")}
-                >
-                  File Upload
-                </button>
-                <button 
-                  onClick={() => setUploadMethod('link')} 
-                  className={cn("flex-1 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest transition-all", uploadMethod === 'link' ? "bg-white text-blue-600 shadow-sm" : "text-gray-400 hover:bg-white/50")}
-                >
-                  Link
-                </button>
-              </div>
-            </div>
-
-            {uploadMethod === 'file' ? (
-              <div className="space-y-1.5"><Label className="text-[10px] uppercase text-gray-400 font-semibold ml-1">Asset File</Label><Input type="file" onChange={e => setAdminNewMaterialFile(e.target.files?.[0] || null)} className="h-12 rounded-xl border-2 font-semibold cursor-pointer file:bg-blue-50 file:text-blue-600 file:border-none file:h-full file:mr-4 px-0" /></div>
-            ) : (
-              <div className="space-y-1.5"><Label className="text-[10px] uppercase text-gray-400 font-semibold ml-1">Asset Link</Label><Input value={adminNewMaterialLink} onChange={e => setAdminNewMaterialLink(e.target.value)} className="h-12 rounded-xl border-2 font-semibold text-sm" placeholder="https://..." /></div>
-            )}
+            <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black tracking-widest ml-1">Asset Identity</Label><Input value={adminNewMaterialTitle} onChange={e => setAdminNewMaterialTitle(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" placeholder="Label..." /></div>
+            <div className="space-y-3"><Label className="text-[10px] uppercase text-gray-500 font-black tracking-widest">Deployment Method</Label><div className="flex bg-black/40 rounded-2xl p-1 border border-neon-border/50"><button onClick={() => setUploadMethod('file')} className={cn("flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", uploadMethod === 'file' ? "bg-neon-cyan text-black" : "text-gray-500 hover:text-white")}>Physical Binary</button><button onClick={() => setUploadMethod('link')} className={cn("flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all", uploadMethod === 'link' ? "bg-neon-cyan text-black" : "text-gray-500 hover:text-white")}>Network Link</button></div></div>
+            {uploadMethod === 'file' ? <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black tracking-widest ml-1">Binary File</Label><Input type="file" onChange={e => setAdminNewMaterialFile(e.target.files?.[0] || null)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-gray-400 file:bg-neon-cyan file:text-black file:border-none file:h-full file:px-6 file:mr-4 file:font-black file:uppercase file:text-[9px] cursor-pointer" /></div> : <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-400 font-black tracking-widest ml-1">Asset URL</Label><Input value={adminNewMaterialLink} onChange={e => setAdminNewMaterialLink(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" placeholder="https://..." /></div>}
           </div>
-          <DialogFooter className="mt-10"><Button onClick={handleAdminUpload} className="w-full bg-blue-600 text-white h-14 rounded-2xl shadow-xl uppercase tracking-widest text-xs font-semibold">EXECUTE UPLOAD</Button></DialogFooter>
+          <DialogFooter className="mt-12"><Button onClick={handleAdminUpload} className="w-full bg-neon-cyan text-black h-16 rounded-[24px] shadow-[0_0_25px_rgba(0,242,255,0.2)] uppercase tracking-[0.2em] text-[10px] transition-all font-black italic">EXECUTE DEPLOYMENT</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
