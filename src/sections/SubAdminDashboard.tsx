@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -29,6 +29,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { MultiSelect, type Option } from '@/components/ui/multi-select';
 import { toast } from 'sonner';
@@ -58,7 +67,8 @@ import {
   Activity as ActivityIcon,
   Key,
   Filter,
-  X
+  X,
+  Settings
 } from 'lucide-react';
 
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -84,8 +94,8 @@ interface AssessmentConfig {
   course_id: string;
   type: 'quiz' | 'examination' | 'assignment';
   title: string;
-  mode: 'objectives' | 'written' | 'integrated' | 'file_upload';
-  submission_mode: 'online' | 'file';
+  mode: string;
+  submission_mode: string;
   duration: number;
   end_date: string;
   assigned_student_ids: string[];
@@ -129,6 +139,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showAdminUploadDialog, setShowAdminUploadDialog] = useState(false);
+  const [showMarkDialog, setShowMarkDialog] = useState(false);
 
   // Form States
   const [newStudentName, setNewStudentName] = useState('');
@@ -142,42 +153,29 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const [duration, setDuration] = useState(30);
   const [endDate, setEndDate] = useState('');
   const [assignedStudents, setAssignedStudents] = useState<string[]>([]);
-
-  const [studentToAssign, setStudentToAssign] = useState<string[]>([]);
-  const [courseToAssign, setCourseToAssign] = useState<string[]>([]);
-
   const [newAssessmentQuestions, setNewAssessmentQuestions] = useState<any[]>([]);
   const [globalAssessmentMode, setGlobalAssessmentMode] = useState<'objective' | 'written' | 'integrated'>('objective');
 
-  const addQuestion = () => {
-    setNewAssessmentQuestions([...newAssessmentQuestions, { 
-      id: Date.now().toString(), 
-      type: globalAssessmentMode, 
-      text: '', 
-      objectiveText: '',
-      modelAnswer: '',
-      options: ['', '', '', ''], 
-      correctAnswer: 0,
-      activeTab: 'objective'
-    }]);
-  };
+  // Enrollment Form
+  const [studentToAssign, setStudentToAssign] = useState<string[]>([]);
+  const [courseToAssign, setCourseToAssign] = useState<string[]>([]);
 
-  const handleGlobalModeChange = (val: 'objective' | 'written' | 'integrated') => {
-    setGlobalAssessmentMode(val);
-    setNewAssessmentQuestions(newAssessmentQuestions.map(q => ({ ...q, type: val, activeTab: val === 'written' ? 'written' : 'objective' })));
-  };
+  // Marking Form
+  const [selectedResult, setSelectedResult] = useState<any>(null);
+  const [markingScore, setMarkingScore] = useState(0);
+  const [markingStatus, setMarkingScoreStatus] = useState<'pending'|'released'>('pending');
+  const [markingShowScore, setMarkingShowScore] = useState(true);
 
-  const updateQuestion = (index: number, field: string, value: any) => {
-    const updated = [...newAssessmentQuestions];
-    updated[index] = { ...updated[index], [field]: value };
-    setNewAssessmentQuestions(updated);
-  };
+  // Material Upload
+  const [adminNewMaterialTitle, setAdminNewMaterialTitle] = useState('');
+  const [adminNewMaterialFile, setAdminNewMaterialFile] = useState<File | null>(null);
+  const [adminNewMaterialLink, setAdminNewMaterialLink] = useState('');
+  const [uploadMethod, setUploadMethod] = useState<'file' | 'link'>('file');
+  const [adminSelectedCourseId, setAdminSelectedCourseId] = useState('');
+  const [adminSelectedMaterialType, setAdminSelectedMaterialType] = useState<'textbooks' | 'videos' | 'pastQuestions'>('textbooks');
+  const [adminSelectedStudentIds, setAdminSelectedStudentIds] = useState<string[]>([]);
 
-  const removeQuestion = (index: number) => {
-    setNewAssessmentQuestions(newAssessmentQuestions.filter((_, i) => i !== index));
-  };
-
-  // Fetch all data from MySQL
+  // Fetch Data
   const fetchData = async () => {
     try {
       const [coursesRes, studentsRes, assessmentsRes, resultsRes, materialsRes, regRes, activityRes] = await Promise.all([
@@ -191,32 +189,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
       ]);
 
       if (coursesRes.ok) setCourses(await coursesRes.json());
-      if (studentsRes.ok) {
-        const data = await studentsRes.json();
-        const parsedStudents = data.map((s: any) => {
-          let details = s.details;
-          for (let i = 0; i < 3; i++) {
-            if (typeof details === 'string' && details.length > 0) {
-              try {
-                const parsed = JSON.parse(details);
-                if (typeof parsed === 'object' || typeof parsed === 'string') {
-                  if (parsed === details) break;
-                  details = parsed;
-                } else break;
-              } catch (e) { break; }
-            } else break;
-          }
-          return { ...s, details };
-        });
-        setStudents(parsedStudents);
-
-        // Refresh selected student to update enrollment view
-        setSelectedStudent(prev => {
-          if (!prev) return null;
-          const updated = parsedStudents.find((s: any) => s.id === prev.id);
-          return updated || prev;
-        });
-      }
+      if (studentsRes.ok) setStudents(await studentsRes.json());
       if (assessmentsRes.ok) setAssessments(await assessmentsRes.json());
       if (resultsRes.ok) setResults(await resultsRes.json());
       if (materialsRes.ok) setUploadedMaterials(await materialsRes.json());
@@ -235,121 +208,123 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   useEffect(() => { fetchData(); }, [user.id]);
 
   // Derived Data
-  const myStudents = students.filter(s => {
+  const myStudents = useMemo(() => students.filter(s => {
     const creatorId = (s as any).created_by || '';
     return creatorId.toUpperCase() === user.id.toUpperCase();
-  });
-  const filteredStudents = myStudents.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.id.toLowerCase().includes(searchQuery.toLowerCase()));
-  const studentOptions: Option[] = myStudents.map(s => ({ label: s.name, value: s.id }));
+  }), [students, user.id]);
+  
+  const filteredStudents = useMemo(() => myStudents.filter(s => s.name.toLowerCase().includes(searchQuery.toLowerCase()) || s.id.toLowerCase().includes(searchQuery.toLowerCase())), [myStudents, searchQuery]);
+  const studentOptions: Option[] = useMemo(() => myStudents.map(s => ({ label: s.name, value: s.id })), [myStudents]);
 
-  // Action Handlers
+  // Handlers
   const handleAddStudent = async () => {
-    if (!newStudentName) {
-      toast.error('Student Name is required');
-      return;
-    }
-    let finalId = newStudentId || 'STU' + Math.floor(1000 + Math.random() * 9000);
-    const finalPassword = newStudentPassword || 'student123';
-    const student = { id: finalId.toUpperCase(), name: newStudentName.toUpperCase(), role: 'student', password: finalPassword, status: 'active', created_by: user.id };
-    try {
-      const res = await fetch(`${API_URL}/api/students`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(student) });
-      if (res.ok) { fetchData(); setShowAddDialog(false); setNewStudentName(''); setNewStudentId(''); setNewStudentPassword(''); setGeneratedCredentials(null); toast.success(`Student ${finalId} Created Successfully`); }
-      else { const errorData = await res.json(); toast.error(errorData.error || 'Failed to create student'); }
-    } catch (e) { toast.error('Network error occurred'); }
+    if (!newStudentName) { toast.error('Name required'); return; }
+    const id = newStudentId || 'STU' + Math.floor(1000 + Math.random() * 9000);
+    const pass = newStudentPassword || 'student123';
+    const student = { id: id.toUpperCase(), name: newStudentName.toUpperCase(), role: 'student', password: pass, status: 'active', created_by: user.id };
+    const res = await fetch(`${API_URL}/api/students`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(student) });
+    if (res.ok) { fetchData(); setShowAddDialog(false); setNewStudentName(''); setNewStudentId(''); setNewStudentPassword(''); toast.success('Created'); }
   };
 
   const handleDeleteStudent = async () => {
     if (!selectedStudent) return;
     const res = await fetch(`${API_URL}/api/students/${selectedStudent.id}`, { method: 'DELETE' });
-    if (res.ok) { fetchData(); setShowDeleteDialog(false); toast.success('Deleted'); }
+    if (res.ok) { fetchData(); setShowDeleteDialog(false); setActiveTab('students'); toast.success('Deleted'); }
   };
 
   const handleApproveRequest = async (req: any) => {
     const id = (req.role === 'student' ? 'STU' : 'ADM') + Math.floor(1000 + Math.random() * 8999);
     const pass = Math.floor(100000 + Math.random() * 899999).toString();
     const userData = { id, name: req.name, password: pass, role: req.role, status: 'active', email: req.email, contact: req.phone, details: req.details, created_by: user.id };
-    try {
-      const endpoint = req.role === 'student' ? '/api/students' : '/api/subadmins';
-      const res = await fetch(`${API_URL}${endpoint}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(userData) });
-      if (res.ok) { await fetch(`${API_URL}/api/reg-requests/${req.id}`, { method: 'DELETE' }); fetchData(); toast.success(`Authorized as ${id}`); }
-    } catch (e) { toast.error('Authorization failed'); }
+    const res = await fetch(`${API_URL}${req.role === 'student' ? '/api/students' : '/api/subadmins'}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(userData) });
+    if (res.ok) { await fetch(`${API_URL}/api/reg-requests/${req.id}`, { method: 'DELETE' }); fetchData(); toast.success(`Authorized as ${id}`); }
   };
 
   const handleRejectRequest = async (req: any) => {
-    try { await fetch(`${API_URL}/api/reg-requests/${req.id}`, { method: 'DELETE' }); fetchData(); toast.error('Unauthorized and Removed'); }
-    catch (e) { toast.error('Action failed'); }
+    await fetch(`${API_URL}/api/reg-requests/${req.id}`, { method: 'DELETE' }); fetchData(); toast.error('Rejected');
   };
 
   const handleCreateAssessment = async () => {
-    if (!selectedCourse) { toast.error('Please select a target course'); return; }
-    if (!assessmentTitle.trim()) { toast.error('Please enter an assessment title'); return; }
-    if (!endDate) { toast.error('Please set a deadline for the assessment'); return; }
-    if (newAssessmentQuestions.length === 0) { toast.error('Please add at least one question to the assessment'); return; }
+    if (!selectedCourse || !assessmentTitle || !endDate) return;
     setIsDeploying(true);
-    const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: 'quiz', title: assessmentTitle, mode: 'objectives', submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
-    try {
-      const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
-      if (res.ok) { fetchData(); toast.success(`Assessment "${assessmentTitle}" published`); setNewAssessmentQuestions([]); setAssessmentTitle(''); setSelectedCourse(''); setEndDate(''); setAssignedStudents([]); }
-      else { const errorData = await res.json(); toast.error(errorData.message || 'Failed to publish assessment'); }
-    } catch (e) { toast.error('Network error'); } finally { setIsDeploying(false); }
+    const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: 'quiz', title: assessmentTitle, mode: globalAssessmentMode, submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
+    const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+    if (res.ok) { fetchData(); toast.success('Published'); setAssessmentTitle(''); setNewAssessmentQuestions([]); }
+    setIsDeploying(false);
   };
 
   const handleAssignCourse = async () => {
-    if (studentToAssign.length === 0 || courseToAssign.length === 0) { toast.error('Selection missing'); return; }
-    let successCount = 0;
+    if (studentToAssign.length === 0 || courseToAssign.length === 0) return;
     for (const sId of studentToAssign) {
       for (const cId of courseToAssign) {
-        const res = await fetch(`${API_URL}/api/enrollments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ student_id: sId, course_id: cId }) });
-        if (res.ok) successCount++;
+        await fetch(`${API_URL}/api/enrollments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ student_id: sId, course_id: cId }) });
       }
     }
-    fetchData();
-    toast.success(`Authorized for ${successCount} assignments`);
-    setStudentToAssign([]);
-    setCourseToAssign([]);
+    fetchData(); toast.success('Assigned'); setStudentToAssign([]); setCourseToAssign([]);
   };
 
-  // Material Upload
-  const [adminNewMaterialTitle, setAdminNewMaterialTitle] = useState('');
-  const [adminNewMaterialFile, setAdminNewMaterialFile] = useState<File | null>(null);
-  const [adminNewMaterialLink, setAdminNewMaterialLink] = useState('');
-  const [uploadMethod, setUploadMethod] = useState<'file' | 'link'>('file');
-  const [adminSelectedCourseId, setAdminSelectedCourseId] = useState('');
-  const [adminSelectedMaterialType, setAdminSelectedMaterialType] = useState<'textbooks' | 'videos' | 'pastQuestions'>('textbooks');
-  const [adminSelectedStudentIds, setAdminSelectedStudentIds] = useState<string[]>([]);
-
   const handleAdminUpload = async () => {
-    if (!adminNewMaterialTitle || !adminSelectedCourseId) { toast.error('Required fields missing'); return; }
+    if (!adminNewMaterialTitle || !adminSelectedCourseId) { toast.error('Fields missing'); return; }
     const process = async (fileUrl?: string) => {
       const mat = { id: `MAT${Date.now()}`, course_id: adminSelectedCourseId, type: adminSelectedMaterialType, title: adminNewMaterialTitle, url: fileUrl || adminNewMaterialLink, uploaded_by: user.name, approved: true, date: new Date().toISOString().split('T')[0], assigned_student_ids: adminSelectedStudentIds };
-      try {
-        const res = await fetch(`${API_URL}/api/materials`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mat) });
-        if (res.ok) { fetchData(); setShowAdminUploadDialog(false); toast.success('Asset Deployed'); setAdminNewMaterialTitle(''); setAdminNewMaterialLink(''); setAdminSelectedCourseId(''); setAdminSelectedStudentIds([]); setAdminNewMaterialFile(null); setUploadMethod('file'); }
-      } catch (e) { toast.error('Network Error'); }
+      const res = await fetch(`${API_URL}/api/materials`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(mat) });
+      if (res.ok) { fetchData(); setShowAdminUploadDialog(false); toast.success('Deployed'); }
     };
     if (uploadMethod === 'file' && adminNewMaterialFile) {
       const formData = new FormData(); formData.append('file', adminNewMaterialFile);
-      try { const uploadRes = await fetch(`${API_URL}/api/upload`, { method: 'POST', body: formData }); if (!uploadRes.ok) throw new Error(); const uploadData = await uploadRes.json(); process(uploadData.url); }
-      catch (err) { toast.error('File upload failed'); }
+      const uploadRes = await fetch(`${API_URL}/api/upload`, { method: 'POST', body: formData });
+      if (uploadRes.ok) { const data = await uploadRes.json(); process(data.url); }
     } else process();
   };
 
-  const handleView = (item: UploadedMaterial) => {
-    if (item.url) {
-      if (item.type === 'videos' && item.url.startsWith('data:video')) {
-        const win = window.open('', '_blank');
-        if (win) { win.document.write(`<html><body style="margin:0;background:#000;display:flex;justify-content:center;align-items:center;height:100vh;"><video controls autoplay src="${item.url}" style="max-width:100%;max-height:100%;"></video></body></html>`); win.document.close(); }
-      } else if (item.url.startsWith('data:application/pdf')) {
-        const win = window.open(); if (win) win.document.write(`<iframe src="${item.url}" frameborder="0" style="border:0;top:0;left:0;bottom:0;right:0;width:100%;height:100%;" allowfullscreen></iframe>`);
-      } else window.open(item.url, '_blank');
-    } else toast.info('No content available.');
+  const handleUpdateResult = async () => {
+    if (!selectedResult) {
+      toast.error('No result selected');
+      return;
+    }
+    try {
+      console.log('Updating result:', selectedResult.id, { score: markingScore, status: markingStatus, show_score: markingShowScore });
+      const res = await fetch(`${API_URL}/api/results/${selectedResult.id}`, { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ score: markingScore, status: markingStatus, show_score: markingShowScore }) 
+      });
+      if (res.ok) { 
+        fetchData(); 
+        setShowMarkDialog(false); 
+        toast.success('Result Updated Successfully'); 
+      } else {
+        const errorData = await res.json();
+        console.error('Server error:', errorData);
+        toast.error(`Update failed: ${errorData.message || res.statusText}`);
+      }
+    } catch (e: any) { 
+      console.error('Network or logic error:', e);
+      toast.error(`Error: ${e.message || 'Unknown error'}`); 
+    }
   };
 
-  const handleDownload = (item: UploadedMaterial) => {
-    if (!item.url) { toast.error('No file found.'); return; }
-    if (item.type === 'videos') { window.open(item.url, '_blank'); return; }
-    const link = document.createElement('a'); link.href = item.url; link.download = item.title; document.body.appendChild(link); link.click(); document.body.removeChild(link); toast.success('Download started.');
+  const addQuestion = () => {
+    setNewAssessmentQuestions([...newAssessmentQuestions, { id: Date.now().toString(), type: globalAssessmentMode, text: '', objectiveText: '', modelAnswer: '', options: ['', '', '', ''], correctAnswer: 0, activeTab: 'objective' }]);
   };
+
+  const updateQuestion = (index: number, field: string, value: any) => {
+    const updated = [...newAssessmentQuestions];
+    updated[index] = { ...updated[index], [field]: value };
+    setNewAssessmentQuestions(updated);
+  };
+
+  const removeQuestion = (index: number) => {
+    setNewAssessmentQuestions(newAssessmentQuestions.filter((_, i) => i !== index));
+  };
+
+  const handleGlobalModeChange = (val: 'objective' | 'written' | 'integrated') => {
+    setGlobalAssessmentMode(val);
+    setNewAssessmentQuestions(newAssessmentQuestions.map(q => ({ ...q, type: val, activeTab: val === 'written' ? 'written' : 'objective' })));
+  };
+
+  const handleView = (item: UploadedMaterial) => { if (item.url) window.open(item.url, '_blank'); };
+  const handleDownload = (item: UploadedMaterial) => { if (item.url) { const link = document.createElement('a'); link.href = item.url; link.download = item.title; document.body.appendChild(link); link.click(); document.body.removeChild(link); } };
 
   const getStatusBadge = (s: string) => {
     const colors: any = { active: 'bg-green-500/20 text-green-400 border-green-500/50', inactive: 'bg-gray-500/20 text-gray-400 border-gray-500/50', suspended: 'bg-red-500/20 text-red-400 border-red-500/50' };
@@ -621,7 +596,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                 <Card className="lg:col-span-1 rounded-[32px] p-8 border border-neon-border bg-neon-card h-full shadow-2xl">
                   <CardHeader className="p-0 mb-8"><CardTitle className="text-lg uppercase font-black italic text-white tracking-tighter">Assessment Config</CardTitle><CardDescription className="text-[10px] uppercase text-gray-500 font-black tracking-widest">Define module parameters</CardDescription></CardHeader>
                   <div className="space-y-6">
-                    <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Course Target</Label><Select value={selectedCourse} onValueChange={setSelectedCourse}><SelectTrigger className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold"><SelectValue placeholder="Select Module" /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border">{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-bold text-gray-300 hover:text-neon-cyan">{c.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Course Target</Label><Select value={selectedCourse} onValueChange={setSelectedCourse}><SelectTrigger className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold"><SelectValue placeholder="Select Module" /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border">{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-bold text-gray-300">{c.name}</SelectItem>)}</SelectContent></Select></div>
                     <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Assessment Title</Label><Input value={assessmentTitle} onChange={e => setAssessmentTitle(e.target.value)} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div>
                     <div className="grid grid-cols-1 gap-6"><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Deadline</Label><Input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Duration (Min)</Label><Input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div></div>
                     <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Assign To</Label><MultiSelect options={studentOptions} selected={assignedStudents} onChange={setAssignedStudents} placeholder="Select identities..." /></div>
@@ -634,7 +609,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                     <div><CardTitle className="text-lg uppercase font-black italic text-white tracking-tighter">Questions Builder</CardTitle><CardDescription className="text-[10px] uppercase text-gray-500 font-black tracking-widest">{newAssessmentQuestions.length} units</CardDescription></div>
                     <div className="flex items-center gap-3 bg-black/40 p-2 rounded-2xl border border-neon-border/50">
                       <Label className="text-[8px] uppercase text-gray-500 font-black tracking-widest ml-2">Engine Mode:</Label>
-                      <Select value={globalAssessmentMode} onValueChange={handleGlobalModeChange}><SelectTrigger className="h-9 w-40 rounded-xl border-neon-cyan/30 bg-transparent text-[9px] font-black uppercase tracking-widest text-neon-cyan"><SelectValue /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border"><SelectItem value="objective" className="font-black text-[9px] uppercase tracking-widest text-gray-300">Objective</SelectItem><SelectItem value="written" className="font-black text-[9px] uppercase tracking-widest text-gray-300">Written</SelectItem><SelectItem value="integrated" className="font-black text-[9px] uppercase tracking-widest text-gray-300">Integrated</SelectItem></SelectContent></Select>
+                      <Select value={globalAssessmentMode} onValueChange={handleGlobalModeChange}><SelectTrigger className="h-9 w-40 rounded-xl border-neon-cyan/30 bg-transparent text-[9px] font-black uppercase tracking-widest text-neon-cyan"><SelectValue /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border"><SelectItem value="objective" className="font-black text-[9px]">Objective</SelectItem><SelectItem value="written" className="font-black text-[9px]">Written</SelectItem><SelectItem value="integrated" className="font-black text-[9px]">Integrated</SelectItem></SelectContent></Select>
                     </div>
                   </div>
                   <ScrollArea className="h-[700px] pr-4">
@@ -671,7 +646,6 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                         </div>
                       ))}
                       <div className="pt-6 flex justify-center"><Button variant="outline" onClick={addQuestion} className="rounded-3xl border-2 border-dashed border-neon-cyan/30 bg-neon-cyan/5 text-neon-cyan hover:bg-neon-cyan hover:text-black transition-all font-black uppercase tracking-[0.2em] px-16 h-16"><Plus className="w-5 h-5 mr-3 stroke-[3px]" /> ADD NEW UNIT</Button></div>
-                      {newAssessmentQuestions.length === 0 && <div className="h-[500px] border border-dashed border-neon-border/50 rounded-[40px] flex flex-col items-center justify-center text-gray-700 gap-6 bg-black/20"><p className="text-[10px] uppercase font-black tracking-[0.4em] italic opacity-20">Engine Offline</p><Button onClick={addQuestion} className="bg-neon-cyan text-black rounded-2xl px-12 h-14 font-black tracking-widest shadow-[0_0_20px_rgba(0,242,255,0.2)]">INITIALIZE BUILDER</Button></div>}
                     </div>
                   </ScrollArea>
                 </Card>
@@ -753,11 +727,16 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                 <TableHeader className="bg-black/40 border-b border-neon-border/50"><TableRow className="hover:bg-transparent"><TableHead className="px-8 py-6 text-neon-cyan uppercase text-[10px] font-black tracking-widest">Student Identity</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black tracking-widest">Assessment</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black tracking-widest">Outcome</TableHead><TableHead className="text-right px-8 text-neon-cyan uppercase text-[10px] font-black tracking-widest">Status</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {results.filter(r => myStudents.some(s => s.id === r.student_id)).map(r => (
-                    <TableRow key={r.id} className="border-b border-neon-border/20 hover:bg-neon-cyan/5 transition-colors">
-                      <TableCell className="px-8 py-8"><div className="flex items-center gap-5"><Avatar className="w-12 h-12 border border-neon-cyan/30 shadow-lg ring-2 ring-black"><AvatarFallback className="bg-neon-card text-neon-cyan uppercase text-xs font-black italic">{r.student_name?.[0] || 'S'}</AvatarFallback></Avatar><div><p className="text-white text-base tracking-tight font-black italic uppercase leading-tight">{r.student_name}</p><p className="text-[10px] text-gray-500 tracking-[0.2em] font-black uppercase mt-1">{r.student_id}</p></div></div></TableCell>
+                    <TableRow key={r.id} className="border-b border-neon-border/20 hover:bg-neon-cyan/5 transition-colors group">
+                      <TableCell className="px-8 py-8"><div className="flex items-center gap-5"><Avatar className="w-12 h-12 border border-neon-cyan/30 shadow-lg ring-2 ring-black"><AvatarFallback className="bg-neon-card text-neon-cyan uppercase text-xs font-black italic">{r.student_name?.[0] || 'S'}</AvatarFallback></Avatar><div><p className="text-white text-base tracking-tight font-black italic uppercase leading-tight">{r.student_name}</p><p className="text-[10px] text-gray-500 tracking-[0.2em] font-black uppercase mt-1 group-hover:text-neon-cyan transition-colors">{r.student_id}</p></div></div></TableCell>
                       <TableCell className="text-center text-gray-300 uppercase text-[10px] tracking-widest font-black italic">{r.assessment_title}</TableCell>
                       <TableCell className="text-center"><span className={cn("text-2xl font-black tracking-tighter italic", r.score >= 50 ? 'text-neon-cyan' : 'text-neon-pink')}>{r.score}%</span></TableCell>
-                      <TableCell className="text-right px-8"><Badge className={cn("px-5 py-2 rounded-full text-[9px] uppercase tracking-widest font-black border italic", r.status === 'released' ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30 shadow-[0_0_10px_rgba(0,242,255,0.1)]' : 'bg-neon-yellow/10 text-neon-yellow border-neon-yellow/30 shadow-[0_0_10px_rgba(255,242,0,0.1)]')}>{r.status}</Badge></TableCell>
+                      <TableCell className="text-right px-8">
+                        <div className="flex items-center justify-end gap-4">
+                          <Badge className={cn("px-5 py-2 rounded-full text-[9px] uppercase tracking-widest font-black border italic", r.status === 'released' ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30 shadow-[0_0_10px_rgba(0,242,255,0.1)]' : 'bg-neon-yellow/10 text-neon-yellow border-neon-yellow/30 shadow-[0_0_10px_rgba(255,242,0,0.1)]')}>{r.status}</Badge>
+                          <Button onClick={() => { setSelectedResult(r); setMarkingScore(r.score); setMarkingScoreStatus(r.status); setMarkingShowScore(r.show_score ?? true); setShowMarkDialog(true); }} className="bg-neon-cyan text-black hover:shadow-lg px-6 rounded-xl h-10 uppercase text-[9px] font-black tracking-widest transition-all italic hover:scale-105">REVIEW</Button>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -795,15 +774,15 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
             <DialogDescription className="text-neon-cyan uppercase text-[9px] tracking-[0.3em] mt-2 text-center font-black drop-shadow-[0_0_5px_rgba(0,242,255,0.3)]">Authorize New Profile</DialogDescription>
           </DialogHeader>
           <div className="space-y-8">
-            <div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase tracking-widest ml-1 font-black">Full Name</Label><Input value={newStudentName} onChange={e => setNewStudentName(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5 focus:border-neon-cyan transition-all shadow-inner" /></div>
+            <div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase tracking-widest font-black ml-1">Full Name</Label><Input value={newStudentName} onChange={e => setNewStudentName(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5 focus:border-neon-cyan transition-all shadow-inner" /></div>
             <div className="space-y-2">
-              <Label className="text-[10px] text-gray-500 uppercase tracking-widest ml-1 font-black">Identity Token</Label>
+              <Label className="text-[10px] text-gray-500 uppercase tracking-widest font-black ml-1">Identity Token</Label>
               <div className="flex gap-3">
                 <Input value={newStudentId} onChange={e => setNewStudentId(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-lg px-5 text-neon-cyan font-black flex-1 tracking-widest shadow-inner" />
                 <Button variant="outline" onClick={() => setNewStudentId('STU'+Math.floor(1000+Math.random()*9000))} className="h-14 w-14 rounded-2xl border-neon-border bg-black/40 hover:bg-neon-cyan/10 transition-all flex-shrink-0"><RefreshCw className="w-5 h-5 text-neon-cyan" /></Button>
               </div>
             </div>
-            <div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase tracking-widest ml-1 font-black">Secret Access Key</Label><Input value={newStudentPassword} onChange={e => setNewStudentPassword(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5 focus:border-neon-cyan transition-all shadow-inner" placeholder="••••••••" /></div>
+            <div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase tracking-widest font-black ml-1">Secret Access Key</Label><Input value={newStudentPassword} onChange={e => setNewStudentPassword(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5 focus:border-neon-cyan transition-all shadow-inner" placeholder="••••••••" /></div>
           </div>
           <DialogFooter className="mt-12"><Button onClick={handleAddStudent} className="w-full bg-neon-cyan text-black h-16 rounded-[24px] shadow-[0_0_20px_rgba(0,242,255,0.2)] uppercase text-[10px] tracking-[0.2em] transition-all hover:scale-105 font-black italic">AUTHORIZE ENTRY</Button></DialogFooter>
         </DialogContent>
@@ -838,6 +817,42 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
             {uploadMethod === 'file' ? <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black tracking-widest ml-1">Binary File</Label><Input type="file" onChange={e => setAdminNewMaterialFile(e.target.files?.[0] || null)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-gray-400 file:bg-neon-cyan file:text-black file:border-none file:h-full file:px-6 file:mr-4 file:font-black file:uppercase file:text-[9px] cursor-pointer" /></div> : <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-400 font-black tracking-widest ml-1">Asset URL</Label><Input value={adminNewMaterialLink} onChange={e => setAdminNewMaterialLink(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" placeholder="https://..." /></div>}
           </div>
           <DialogFooter className="mt-12"><Button onClick={handleAdminUpload} className="w-full bg-neon-cyan text-black h-16 rounded-[24px] shadow-[0_0_25px_rgba(0,242,255,0.2)] uppercase tracking-[0.2em] text-[10px] transition-all font-black italic">EXECUTE DEPLOYMENT</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showMarkDialog} onOpenChange={setShowMarkDialog}>
+        <DialogContent className="rounded-[32px] max-w-[360px] p-6 border border-neon-cyan/30 bg-neon-card backdrop-blur-2xl shadow-3xl font-inter">
+          <div className="absolute top-0 left-0 w-full h-1 bg-neon-cyan shadow-[0_0_15px_#00f2ff]" />
+          <DialogHeader className="mb-6 text-center">
+            <DialogTitle className="text-lg uppercase text-white tracking-tighter font-black italic">Academic Review</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-5 rounded-[24px] bg-black/40 border border-neon-border shadow-inner text-center">
+              <p className="text-[8px] text-gray-500 uppercase font-black mb-2">Intelligence</p>
+              <p className="text-base text-white uppercase font-black italic leading-none mb-1">{selectedResult?.student_name}</p>
+              <p className="text-[10px] text-neon-cyan uppercase font-black">{selectedResult?.assessment_title}</p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-[9px] uppercase text-gray-500 ml-2 font-black">Score (%)</Label>
+              <Input type="number" value={markingScore} onChange={e => setMarkingScore(Number(e.target.value))} className="h-14 rounded-2xl border-neon-border bg-black/60 text-2xl text-center text-white font-black italic shadow-inner focus:border-neon-cyan" />
+            </div>
+            <div className="flex items-center justify-between p-5 bg-black/40 rounded-[24px] border border-neon-border">
+              <div className="space-y-0.5">
+                <Label className="text-[9px] font-black uppercase flex items-center gap-2 text-white">
+                  {markingStatus === 'released' ? <Eye className="w-4 h-4 text-neon-cyan" /> : <Shield className="w-4 h-4 text-gray-500" />}
+                  Visibility
+                </Label>
+                <p className="text-[8px] text-gray-500 font-black">{markingStatus === 'released' ? 'Released' : 'Pending'}</p>
+              </div>
+              <Switch 
+                checked={markingStatus === 'released'} 
+                onCheckedChange={(checked) => { setMarkingScoreStatus(checked ? 'released' : 'pending'); setMarkingShowScore(checked); }} 
+              />
+            </div>
+          </div>
+          <DialogFooter className="mt-8">
+            <Button onClick={handleUpdateResult} className="w-full bg-neon-cyan text-black h-12 rounded-xl shadow-lg uppercase tracking-[0.2em] text-[9px] transition-all hover:scale-105 font-black italic">COMMIT RECORD</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
