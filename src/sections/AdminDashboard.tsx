@@ -300,12 +300,25 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   };
 
   const handleCreateAssessment = async () => {
-    if (!selectedCourse || !assessmentTitle || !endDate) return;
+    if (!selectedCourse || !assessmentTitle || !endDate) {
+      toast.error('Module, Title, and Deadline are required');
+      return;
+    }
+    if (newAssessmentQuestions.length === 0) {
+      toast.error('Please add at least one question to the assessment');
+      return;
+    }
     setIsDeploying(true);
-    const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: 'quiz', title: assessmentTitle, mode: globalAssessmentMode, submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
-    const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
-    if (res.ok) { fetchData(); toast.success('Published'); setAssessmentTitle(''); setNewAssessmentQuestions([]); }
-    setIsDeploying(false);
+    try {
+      const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: 'quiz', title: assessmentTitle, mode: globalAssessmentMode, submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
+      const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+      if (res.ok) { fetchData(); toast.success('Published'); setAssessmentTitle(''); setNewAssessmentQuestions([]); }
+      else { toast.error('Failed to publish assessment'); }
+    } catch (error) {
+      toast.error('Network error while deploying assessment');
+    } finally {
+      setIsDeploying(false);
+    }
   };
 
   const handleUpdateResult = async () => {
