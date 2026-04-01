@@ -9,17 +9,17 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { 
-  BookOpen, 
-  Home, 
-  Calendar as CalendarIcon, 
-  Bell, 
-  Settings, 
-  LogOut, 
-  User as UserIcon, 
-  Shield, 
-  Menu, 
-  ChevronRight, 
+import {
+  BookOpen,
+  Home,
+  Calendar as CalendarIcon,
+  Bell,
+  Settings,
+  LogOut,
+  User as UserIcon,
+  Shield,
+  Menu,
+  ChevronRight,
   ChevronLeft,
   X,
   Clock,
@@ -37,12 +37,12 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Calendar } from '@/components/ui/calendar';
 import { Switch } from '@/components/ui/switch';
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogFooter 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
@@ -100,7 +100,7 @@ type MaterialType = 'textbooks' | 'videos' | 'quiz' | 'examination' | 'pastQuest
 export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashboardProps) {
   const isMobile = useIsMobile();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  
+
   // Data State
   const [courses, setCourses] = useState<Course[]>([]);
   const [assessments, setAssessments] = useState<Assessment[]>([]);
@@ -116,9 +116,9 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
   const [filteredAssessments, setFilteredAssessments] = useState<Assessment[]>([]);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showProfileDialog, setShowProfileDialog] = useState(false);
-  const [profileData, setProfileData] = useState({ 
-    name: user.name, 
-    id: user.id, 
+  const [profileData, setProfileData] = useState({
+    name: user.name,
+    id: user.id,
     password: user.password,
     showScores: user.details?.showScores ?? true
   });
@@ -165,12 +165,12 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
   // Derived Data
   const userCourses = courses.filter(c => enrolledCourseIds.includes(c.id));
   const filteredUserCourses = useMemo(() => {
-    return userCourses.filter(c => 
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    return userCourses.filter(c =>
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.code.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [userCourses, searchQuery]);
-  
+
   const eventsByDate = useMemo(() => {
     const events = new Map<string, CalendarEvent[]>();
     assessments.forEach(asmt => {
@@ -212,9 +212,9 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
     if (['quiz', 'examination', 'assignments'].includes(type)) {
       const typeKey = type === 'assignments' ? 'assignment' : type;
       const completedIds = studentResults.map(r => r.assessment_id);
-      const relevant = assessments.filter(a => 
-        a.course_id === selectedCourse?.id && 
-        a.type === typeKey && 
+      const relevant = assessments.filter(a =>
+        a.course_id === selectedCourse?.id &&
+        a.type === typeKey &&
         !completedIds.includes(a.id) &&
         (!a.assigned_student_ids || a.assigned_student_ids.includes(user.id))
       );
@@ -258,9 +258,9 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
 
   const handleUpdateProfile = async () => {
     try {
-      const updated = { 
-        ...user, 
-        name: profileData.name.toUpperCase(), 
+      const updated = {
+        ...user,
+        name: profileData.name.toUpperCase(),
         password: profileData.password,
         details: { ...user.details, showScores: profileData.showScores }
       };
@@ -307,22 +307,22 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
               { id: 'announcements', icon: Bell, label: 'Updates' },
               { id: 'settings', icon: Settings, label: 'Settings' }
             ]
-            .filter(item => {
-              if (user.status === 'suspended') {
-                return ['home', 'courses', 'calendar', 'announcements'].includes(item.id);
-              }
-              return true;
-            })
-            .map(item => (
-              <button
-                key={item.id}
-                onClick={() => { setViewMode(item.id as any); if(isMobile) setMobileMenuOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${viewMode === item.id ? 'bg-blue-50 text-blue-600 shadow-sm font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
-              >
-                <item.icon className="w-5 h-5" />
-                {!sidebarCollapsed && <span className="text-xs uppercase font-semibold">{item.label}</span>}
-              </button>
-            ))}
+              .filter(item => {
+                if (user.status === 'suspended') {
+                  return ['home', 'courses', 'calendar', 'announcements'].includes(item.id);
+                }
+                return true;
+              })
+              .map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => { setViewMode(item.id as any); if (isMobile) setMobileMenuOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${viewMode === item.id ? 'bg-blue-50 text-blue-600 shadow-sm font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
+                >
+                  <item.icon className="w-5 h-5" />
+                  {!sidebarCollapsed && <span className="text-xs uppercase font-semibold">{item.label}</span>}
+                </button>
+              ))}
           </div>
         </ScrollArea>
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t bg-gray-50/50">
@@ -445,11 +445,11 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                 <div className="flex flex-col md:flex-row justify-between items-center gap-4">
                   <div className="relative flex-1 max-w-md w-full">
                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                    <Input 
-                      placeholder="Search my courses..." 
-                      value={searchQuery} 
-                      onChange={e => setSearchQuery(e.target.value)} 
-                      className="pl-12 rounded-2xl h-12 bg-white border-2 border-blue-50 focus-visible:ring-blue-500 shadow-sm" 
+                    <Input
+                      placeholder="Search my courses..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className="pl-12 rounded-2xl h-12 bg-white border-2 border-blue-50 focus-visible:ring-blue-500 shadow-sm"
                     />
                   </div>
                 </div>
@@ -457,46 +457,46 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {filteredUserCourses.length > 0 ? filteredUserCourses.map(course => (
                     <Card key={course.id} className="group overflow-hidden border-none shadow-lg rounded-3xl hover:shadow-xl transition-all cursor-pointer" onClick={() => handleCourseSelect(course)}>
-                    <div className="h-32 relative">
-                      <img src={course.image} alt={course.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                      
-                      {/* Dynamic Subject Name on Placeholder */}
-                      {course.image === '/course-placeholder.svg' && (
-                        <div className="absolute inset-0 flex flex-col items-center justify-start pt-8 px-2 z-20 pointer-events-none">
-                          <h4 className="text-[22px] font-black text-white uppercase tracking-tighter text-center leading-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
-                            {course.name}
-                          </h4>
-                          <div className="mt-auto mb-2 flex flex-col items-center">
-                            <p className="text-[6px] font-black text-white/90 uppercase tracking-[0.2em] italic drop-shadow-sm">
-                              Student Edition
-                            </p>
-                          </div>
-                        </div>
-                      )}
+                      <div className="h-32 relative">
+                        <img src={course.image} alt={course.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
 
-                      <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
-                      <div className="absolute bottom-4 left-4 text-white">
-                        <p className="text-[10px] uppercase tracking-widest text-blue-200 font-semibold">{course.code}</p>
-                        <h3 className="text-lg font-semibold uppercase tracking-tight">{course.name}</h3>
+                        {/* Dynamic Subject Name on Placeholder */}
+                        {course.image === '/course-placeholder.svg' && (
+                          <div className="absolute inset-0 flex flex-col items-center justify-start pt-8 px-2 z-20 pointer-events-none">
+                            <h4 className="text-[22px] font-black text-white uppercase tracking-tighter text-center leading-none drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                              {course.name}
+                            </h4>
+                            <div className="mt-auto mb-2 flex flex-col items-center">
+                              <p className="text-[6px] font-black text-white/90 uppercase tracking-[0.2em] italic drop-shadow-sm">
+                                Student Edition
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="absolute inset-0 bg-black/40 group-hover:bg-black/20 transition-colors" />
+                        <div className="absolute bottom-4 left-4 text-white">
+                          <p className="text-[10px] uppercase tracking-widest text-blue-200 font-semibold">{course.code}</p>
+                          <h3 className="text-lg font-semibold uppercase tracking-tight">{course.name}</h3>
+                        </div>
                       </div>
+                      <CardContent className="p-6">
+                        <p className="text-xs text-gray-500 font-semibold mb-4 flex items-center gap-2"><UserIcon className="w-4 h-4" /> {course.instructor}</p>
+                        <Button onClick={(e) => { e.stopPropagation(); handleCourseSelect(course); }} className="w-full bg-blue-600 group-hover:bg-blue-700 rounded-xl font-semibold text-xs uppercase tracking-widest">Open Course</Button>
+                      </CardContent>
+                    </Card>
+                  )) : (
+                    <div className="col-span-full py-32 text-center animate-scale-in">
+                      <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6 text-blue-200">
+                        <BookOpen className="w-12 h-12" />
+                      </div>
+                      <h3 className="text-xl font-black text-gray-400 uppercase tracking-widest italic">No Course Has Been Assigned yet</h3>
+                      <p className="text-xs text-gray-300 uppercase tracking-[0.2em] mt-4 font-bold">Please check back later or contact your administrator</p>
                     </div>
-                    <CardContent className="p-6">
-                      <p className="text-xs text-gray-500 font-semibold mb-4 flex items-center gap-2"><UserIcon className="w-4 h-4" /> {course.instructor}</p>
-                      <Button className="w-full bg-blue-600 group-hover:bg-blue-700 rounded-xl font-semibold text-xs uppercase tracking-widest">Open Course</Button>
-                    </CardContent>
-                  </Card>
-                )) : (
-                  <div className="col-span-full py-32 text-center animate-scale-in">
-                    <div className="w-24 h-24 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6 text-blue-200">
-                      <BookOpen className="w-12 h-12" />
-                    </div>
-                    <h3 className="text-xl font-black text-gray-400 uppercase tracking-widest italic">No Course Has Been Assigned yet</h3>
-                    <p className="text-xs text-gray-300 uppercase tracking-[0.2em] mt-4 font-bold">Please check back later or contact your administrator</p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
             {viewMode === 'announcements' && (
               <div className="max-w-3xl mx-auto space-y-6 animate-fade-in font-arial">
@@ -562,9 +562,9 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                             {asmt.type}
                           </Badge>
                           <div className="flex gap-2">
-                             <Badge variant="outline" className="border-gray-100 text-gray-400 font-black text-[9px] uppercase tracking-widest">
-                               {asmt.mode.replace('_', ' ')}
-                             </Badge>
+                            <Badge variant="outline" className="border-gray-100 text-gray-400 font-black text-[9px] uppercase tracking-widest">
+                              {asmt.mode.replace('_', ' ')}
+                            </Badge>
                           </div>
                         </div>
 
@@ -595,8 +595,8 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                           )}
                         </div>
 
-                        <Button 
-                          onClick={() => { setActiveAssessment(asmt); setViewMode('quiz'); }} 
+                        <Button
+                          onClick={() => { setActiveAssessment(asmt); setViewMode('quiz'); }}
                           className="w-full h-16 bg-gray-900 hover:bg-blue-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 group/btn"
                         >
                           Access Assessment <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-2 transition-transform" />
@@ -604,7 +604,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                       </div>
                     </Card>
                   ))}
-                  
+
                   {filteredAssessments.length === 0 && (
                     <div className="col-span-full py-20 text-center bg-gray-50 rounded-[40px] border-2 border-dashed border-gray-200">
                       <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-sm">
@@ -618,30 +618,30 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
               </div>
             )}
 
-      {/* Quiz Overlay */}
-      {viewMode === 'quiz' && activeAssessment && selectedCourse && (
-        <div className="fixed inset-0 z-[100] bg-white font-semibold overflow-y-auto">
-          <QuizInterface 
-            assessment={activeAssessment} 
-            course={selectedCourse} 
-            onComplete={handleAssessmentComplete} 
-            onCancel={() => { 
-              setViewMode('materials'); 
-              setActiveAssessment(null); 
-            }} 
-          />
-        </div>
-      )}
+            {/* Quiz Overlay */}
+            {viewMode === 'quiz' && activeAssessment && selectedCourse && (
+              <div className="fixed inset-0 z-[100] bg-white font-semibold overflow-y-auto">
+                <QuizInterface
+                  assessment={activeAssessment}
+                  course={selectedCourse}
+                  onComplete={handleAssessmentComplete}
+                  onCancel={() => {
+                    setViewMode('materials');
+                    setActiveAssessment(null);
+                  }}
+                />
+              </div>
+            )}
 
-      {/* Calendar View */}
-      {viewMode === 'calendar' && (
+            {/* Calendar View */}
+            {viewMode === 'calendar' && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-fade-in font-arial">
                 <Card className="lg:col-span-1 rounded-3xl border-none shadow-xl p-6 bg-white">
-                  <Calendar 
-                    mode="single" 
+                  <Calendar
+                    mode="single"
                     selected={selectedDate}
                     onSelect={setSelectedDate}
-                    className="rounded-2xl font-semibold w-full" 
+                    className="rounded-2xl font-semibold w-full"
                     modifiers={{ event: eventDays }}
                     modifiersClassNames={{
                       event: "after:content-[''] after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:w-1 after:h-1 after:bg-blue-600 after:rounded-full"
@@ -679,7 +679,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed max-w-md">{ev.details}</p>
                           </div>
                         </div>
-                        <Button variant="ghost" size="icon" className="text-gray-300 group-hover:text-blue-600 transition-colors">
+                        <Button onClick={() => toast.info('Event details feature coming soon')} variant="ghost" size="icon" className="text-gray-300 group-hover:text-blue-600 transition-colors">
                           <ChevronRight className="w-6 h-6" />
                         </Button>
                       </div>
@@ -705,10 +705,10 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
         <DialogContent className="rounded-3xl max-w-md p-8 font-semibold">
           <DialogHeader><DialogTitle className="text-xl font-semibold uppercase tracking-tight">Profile Settings</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-widest font-semibold ml-1">Full Name</Label><Input value={profileData.name} onChange={e => setProfileData({...profileData, name: e.target.value})} className="h-11 rounded-xl border-2 font-semibold text-sm" /></div>
+            <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-widest font-semibold ml-1">Full Name</Label><Input value={profileData.name} onChange={e => setProfileData({ ...profileData, name: e.target.value })} className="h-11 rounded-xl border-2 font-semibold text-sm" /></div>
             <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-widest font-semibold ml-1">Identity ID</Label><Input value={profileData.id} disabled className="h-11 border-2 rounded-xl bg-gray-50 text-gray-400 font-semibold text-sm" /></div>
-            <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-widest font-semibold ml-1">New Access Key</Label><Input type="password" value={profileData.password} onChange={e => setProfileData({...profileData, password: e.target.value})} className="h-11 rounded-xl border-2 font-semibold text-sm" /></div>
-            
+            <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-widest font-semibold ml-1">New Access Key</Label><Input type="password" value={profileData.password} onChange={e => setProfileData({ ...profileData, password: e.target.value })} className="h-11 rounded-xl border-2 font-semibold text-sm" /></div>
+
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 mt-6">
               <div className="space-y-0.5">
                 <Label className="text-xs font-black uppercase tracking-tight flex items-center gap-2">
@@ -717,9 +717,9 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                 </Label>
                 <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-none">Show grades on dashboard</p>
               </div>
-              <Switch 
-                checked={profileData.showScores} 
-                onCheckedChange={(checked) => setProfileData({...profileData, showScores: checked})} 
+              <Switch
+                checked={profileData.showScores}
+                onCheckedChange={(checked) => setProfileData({ ...profileData, showScores: checked })}
               />
             </div>
           </div>
