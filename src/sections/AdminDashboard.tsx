@@ -310,7 +310,8 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
     }
     setIsDeploying(true);
     try {
-      const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: 'quiz', title: assessmentTitle, mode: globalAssessmentMode, submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
+      const modeToSend = globalAssessmentMode === 'objective' ? 'objectives' : globalAssessmentMode;
+      const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: 'quiz', title: assessmentTitle, mode: modeToSend, submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
       const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
       if (res.ok) { fetchData(); toast.success('Published'); setAssessmentTitle(''); setNewAssessmentQuestions([]); }
       else {
