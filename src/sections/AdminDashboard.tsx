@@ -115,7 +115,7 @@ interface UploadedMaterial {
 
 export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser }: AdminDashboardProps) {
   const isMobile = useIsMobile();
-  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`;
+  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001`;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Core Data State
@@ -313,9 +313,13 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
       const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: 'quiz', title: assessmentTitle, mode: globalAssessmentMode, submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
       const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
       if (res.ok) { fetchData(); toast.success('Published'); setAssessmentTitle(''); setNewAssessmentQuestions([]); }
-      else { toast.error('Failed to publish assessment'); }
-    } catch (error) {
-      toast.error('Network error while deploying assessment');
+      else {
+        let errMsg = 'Failed to publish assessment';
+        try { const errorData = await res.json(); if (errorData.message) errMsg = errorData.message; } catch (e) { }
+        toast.error(`Deploy failed: ${errMsg}`);
+      }
+    } catch (error: any) {
+      toast.error(`Error: ${error.message || 'Network error while deploying assessment'}`);
     } finally {
       setIsDeploying(false);
     }
