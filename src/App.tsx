@@ -65,7 +65,7 @@ function DeactivatedAccountView({ user, onLogout }: { user: User, onLogout: () =
         </div>
         <h2 className="text-2xl font-bold text-gray-800 uppercase tracking-tight mb-2">Your Account Has Been Deactivated</h2>
         <p className="text-gray-400 uppercase text-[10px] tracking-[0.2em] mb-10 font-semibold">Please Contact Your Admin</p>
-        
+
         {loading ? (
           <div className="h-48 flex items-center justify-center text-gray-300 italic text-sm animate-pulse">
             Establishing secure connection...
@@ -95,7 +95,7 @@ function DeactivatedAccountView({ user, onLogout }: { user: User, onLogout: () =
   );
 }
 
-class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean, error: any}> {
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: any }> {
   constructor(props: any) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -111,7 +111,7 @@ class ErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean,
             <h2 className="text-xl text-red-600 mb-4 font-semibold">Something went wrong</h2>
             <p className="text-gray-600 mb-6 text-sm font-medium">The application encountered an error. Please try clearing your local storage or contact support.</p>
             <pre className="bg-gray-100 p-4 rounded-lg text-[10px] overflow-auto max-h-40 mb-6 font-medium">{this.state.error?.toString()}</pre>
-            <button 
+            <button
               onClick={() => { sessionStorage.clear(); window.location.reload(); }}
               className="w-full py-3 bg-red-600 text-white rounded-xl font-semibold hover:bg-red-700 transition-colors text-xs uppercase tracking-widest"
             >
@@ -143,7 +143,7 @@ function App() {
 
       const savedView = sessionStorage.getItem('alamel_current_view');
       if (savedView) return savedView as View;
-      
+
       const user = JSON.parse(savedUser);
       return user.role === 'admin' || user.role === 'sub-admin' ? 'admin' : 'student';
     } catch (e) {
@@ -165,10 +165,10 @@ function App() {
   const handleLogin = (user: Student | User) => {
     const now = new Date().toLocaleString();
     const updatedUser = { ...user, last_login: now };
-    
+
     setCurrentUser(updatedUser);
     sessionStorage.setItem('alamel_user', JSON.stringify(updatedUser));
-    
+
     setCurrentView(user.role === 'admin' || user.role === 'sub-admin' ? 'admin' : 'student');
   };
 
@@ -190,7 +190,7 @@ function App() {
     <ErrorBoundary>
       <div className="min-h-screen bg-alamel-lightGray relative font-inter">
         <Toaster position="top-right" richColors />
-        
+
         {currentUser?.status === 'inactive' ? (
           <DeactivatedAccountView user={currentUser} onLogout={handleLogout} />
         ) : (
@@ -198,27 +198,27 @@ function App() {
             {currentView === 'login' && (
               <LoginScreen onLogin={handleLogin} />
             )}
-            
+
             {currentView === 'student' && currentUser && (
-              <StudentDashboard 
-                user={currentUser as Student} 
+              <StudentDashboard
+                user={currentUser as Student}
                 onLogout={handleLogout}
                 onSwitchToAdmin={switchToAdmin}
                 onUpdateUser={handleUpdateUser}
               />
             )}
-            
+
             {currentView === 'admin' && currentUser && (
               currentUser.id.toUpperCase() === 'ADMIN' ? (
-                <AdminDashboard 
-                  user={currentUser} 
+                <AdminDashboard
+                  user={currentUser}
                   onLogout={handleLogout}
                   onSwitchToStudent={switchToStudent}
                   onUpdateUser={handleUpdateUser}
                 />
               ) : (
-                <SubAdminDashboard 
-                  user={currentUser} 
+                <SubAdminDashboard
+                  user={currentUser}
                   onLogout={handleLogout}
                   onSwitchToStudent={switchToStudent}
                   onUpdateUser={handleUpdateUser}

@@ -17,7 +17,7 @@ cloudinary.config({
 });
 
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
   storage: storage,
   limits: { fileSize: 150 * 1024 * 1024 } // 150MB limit
 });
@@ -94,7 +94,7 @@ async function applySchemaUpdates() {
     `ALTER TABLE registration_requests ADD COLUMN IF NOT EXISTS approved_user_id VARCHAR(50) AFTER status;`,
     `ALTER TABLE materials ADD COLUMN IF NOT EXISTS assigned_student_ids JSON;`,
     `ALTER TABLE materials MODIFY COLUMN url LONGTEXT;`,
-    `ALTER TABLE results ADD COLUMN IF NOT EXISTS show_score BOOLEAN DEFAULT TRUE;`
+    `ALTER TABLE results ADD COLUMN show_score BOOLEAN DEFAULT FALSE;`
   ];
 
   logDebug('Syncing database schema (ON UPDATE CASCADE)...');
@@ -102,8 +102,8 @@ async function applySchemaUpdates() {
     try {
       await pool.query(statement);
     } catch (error) {
-      if (error.code !== 'ER_CANT_DROP_FIELD_OR_KEY' && error.code !== 'ER_DROP_INDEX_FK') {
-         logDebug(`Note: ${error.message}`);
+      if (error.code !== 'ER_CANT_DROP_FIELD_OR_KEY' && error.code !== 'ER_DROP_INDEX_FK' && error.code !== '1060') {
+        logDebug(`Note: ${error.message} (Code: ${error.code})`);
       }
     }
   }
@@ -164,16 +164,16 @@ app.post('/api/students', async (req, res) => {
   const { id, name, password, role, status, created_by, email, contact, details } = req.body;
   try {
     const detailsStr = typeof details === 'string' ? details : JSON.stringify(details || null);
-    await pool.execute('INSERT INTO users (id, name, password, role, status, created_by, email, contact, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', 
+    await pool.execute('INSERT INTO users (id, name, password, role, status, created_by, email, contact, details) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
-        id || null, 
-        name || null, 
-        password || null, 
-        role || 'student', 
-        status || 'active', 
-        created_by || null, 
-        email || null, 
-        contact || null, 
+        id || null,
+        name || null,
+        password || null,
+        role || 'student',
+        status || 'active',
+        created_by || null,
+        email || null,
+        contact || null,
         detailsStr
       ]);
     res.status(201).json({ message: 'Created' });
@@ -192,14 +192,14 @@ app.put('/api/students/:id', async (req, res) => {
       query += ', id = ?';
       params.push(newId);
     }
-    
+
     query += ' WHERE id = ?';
     params.push(oldId);
 
     await pool.execute(query, params);
     res.json({ message: 'Updated' });
-  } catch (error) { 
-    res.status(500).json({ message: error.message }); 
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -227,12 +227,12 @@ app.get('/api/subadmins', async (req, res) => {
 app.post('/api/subadmins', async (req, res) => {
   const { id, name, password, email, contact } = req.body;
   try {
-    await pool.execute('INSERT INTO users (id, name, password, role, status, email, contact) VALUES (?, ?, ?, "sub-admin", "active", ?, ?)', 
+    await pool.execute('INSERT INTO users (id, name, password, role, status, email, contact) VALUES (?, ?, ?, "sub-admin", "active", ?, ?)',
       [
-        (id || '').toUpperCase(), 
-        (name || '').toUpperCase(), 
-        password || null, 
-        email || null, 
+        (id || '').toUpperCase(),
+        (name || '').toUpperCase(),
+        password || null,
+        email || null,
         contact || null
       ]);
     res.status(201).json({ message: 'Sub-Admin Created' });
@@ -259,12 +259,12 @@ app.post('/api/courses', async (req, res) => {
   const { id, name, code, instructor, color, image } = req.body;
   logDebug(`Creating course: ${JSON.stringify({ id, name, code })}`);
   try {
-    await pool.execute('INSERT INTO courses (id, name, code, instructor, color, image) VALUES (?, ?, ?, ?, ?, ?)', 
+    await pool.execute('INSERT INTO courses (id, name, code, instructor, color, image) VALUES (?, ?, ?, ?, ?, ?)',
       [id || null, name || null, code || null, instructor || null, color || null, image || '/course-placeholder.svg']);
     res.status(201).json({ message: 'Created' });
-  } catch (error) { 
+  } catch (error) {
     logDebug(`Course creation error: ${error.message}`);
-    res.status(500).json({ message: error.message }); 
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -290,9 +290,9 @@ app.post('/api/enrollments', async (req, res) => {
   try {
     await pool.execute('INSERT IGNORE INTO enrollments (student_id, course_id) VALUES (?, ?)', [student_id || null, course_id || null]);
     res.json({ message: 'Enrolled' });
-  } catch (error) { 
+  } catch (error) {
     logDebug(`Enrollment error: ${error.message}`);
-    res.status(500).json({ message: error.message }); 
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -322,7 +322,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
     else resource_type = 'raw'; // For PDFs, docs, etc.
 
     const stream = cloudinary.uploader.upload_stream(
-      { 
+      {
         resource_type,
         folder: 'alamel_materials',
         public_id: `file_${Date.now()}`
@@ -355,7 +355,7 @@ app.get('/api/materials', async (req, res) => {
 app.post('/api/materials', async (req, res) => {
   const { id, course_id, type, title, description, file_name, file_size, url, uploaded_by, approved, assigned_student_ids, date } = req.body;
   logDebug(`[Materials] New upload request from ${uploaded_by} for course ${course_id}. Title: ${title}, File: ${file_name || 'N/A'} (${file_size || 'N/A'})`);
-  
+
   if (url && url.length > 1000) {
     logDebug(`[Materials] URL/File data length: ${url.length} characters`);
   }
@@ -363,31 +363,31 @@ app.post('/api/materials', async (req, res) => {
   try {
     await pool.execute('INSERT INTO materials (id, course_id, type, title, description, file_name, file_size, url, uploaded_by, approved, assigned_student_ids, date) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
-        id || null, 
-        course_id || null, 
-        type || null, 
-        title || null, 
-        description || null, 
-        file_name || null, 
-        file_size || null, 
-        url || null, 
-        uploaded_by || null, 
-        approved ? 1 : 0, 
+        id || null,
+        course_id || null,
+        type || null,
+        title || null,
+        description || null,
+        file_name || null,
+        file_size || null,
+        url || null,
+        uploaded_by || null,
+        approved ? 1 : 0,
         JSON.stringify(assigned_student_ids || []),
         date || new Date().toISOString().split('T')[0]
       ]);
     logDebug(`[Materials] Successfully uploaded ${id}`);
     res.status(201).json({ message: 'Uploaded' });
-  } catch (error) { 
+  } catch (error) {
     logDebug(`[Materials] Error uploading ${id}: ${error.message}`);
-    res.status(500).json({ message: error.message }); 
+    res.status(500).json({ message: error.message });
   }
 });
 
 app.put('/api/materials/:id', async (req, res) => {
   const { id } = req.params;
   const fields = req.body;
-  
+
   // Basic validation to prevent updating arbitrary columns
   const allowedFields = ['course_id', 'type', 'title', 'description', 'url', 'approved', 'assigned_student_ids'];
   const fieldEntries = Object.entries(fields).filter(([key]) => allowedFields.includes(key));
@@ -442,35 +442,35 @@ app.get('/api/assessments', async (req, res) => {
 
 app.post('/api/assessments', async (req, res) => {
   const { id, course_id, title, type, marking_type, submission_mode, mode, duration, start_date, end_date, structured_questions, question_file_url, question_file_name, assigned_student_ids } = req.body;
-  
+
   const formattedStart = formatMySQLDate(start_date);
   const formattedEnd = formatMySQLDate(end_date);
-  
+
   logDebug(`[Assessments] Creating: "${title}". Raw Start: ${start_date}, Formatted: ${formattedStart}`);
   logDebug(`[Assessments] Raw End: ${end_date}, Formatted: ${formattedEnd}`);
 
   try {
     await pool.execute('INSERT INTO assessments (id, course_id, title, type, marking_type, submission_mode, mode, duration, start_date, end_date, structured_questions, question_file_url, question_file_name, assigned_student_ids) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
-        id || null, 
-        course_id || null, 
-        title || null, 
-        type || null, 
-        marking_type || null, 
-        submission_mode || null, 
-        mode || null, 
-        duration || 0, 
-        formattedStart, 
-        formattedEnd, 
-        JSON.stringify(structured_questions || []), 
-        question_file_url || null, 
-        question_file_name || null, 
+        id || null,
+        course_id || null,
+        title || null,
+        type || null,
+        marking_type || null,
+        submission_mode || null,
+        mode || null,
+        duration || 0,
+        formattedStart,
+        formattedEnd,
+        JSON.stringify(structured_questions || []),
+        question_file_url || null,
+        question_file_name || null,
         JSON.stringify(assigned_student_ids || [])
       ]);
     res.status(201).json({ message: 'Assessment Created' });
-  } catch (error) { 
+  } catch (error) {
     logDebug(`[Assessments Error] ${error.message}`);
-    res.status(500).json({ message: error.message }); 
+    res.status(500).json({ message: error.message });
   }
 });
 
@@ -490,6 +490,7 @@ app.get('/api/results', async (req, res) => {
       JOIN assessments a ON r.assessment_id = a.id
       JOIN courses c ON a.course_id = c.id
       JOIN users u ON r.student_id = u.id
+      ORDER BY r.timestamp DESC
     `);
     res.json(rows);
   } catch (error) { res.status(500).json({ message: error.message }); }
@@ -504,28 +505,28 @@ app.get('/api/results/:student_id', async (req, res) => {
       JOIN courses c ON a.course_id = c.id
       JOIN users u ON r.student_id = u.id
       WHERE r.student_id = ?
+      ORDER BY r.timestamp DESC
     `, [req.params.student_id]);
     res.json(rows);
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 app.post('/api/results', async (req, res) => {
-  const { id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking, show_score } = req.body;
+  const { id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking } = req.body;
   try {
-    await pool.execute('INSERT INTO results (id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking, show_score) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    await pool.execute('INSERT INTO results (id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
-        id || null, 
-        student_id || null, 
-        assessment_id || null, 
-        score || 0, 
-        correct_answers || 0, 
-        total_questions || 0, 
-        status || 'pending', 
-        JSON.stringify(answers || {}), 
-        JSON.stringify(student_file || null), 
-        feedback || null, 
-        JSON.stringify(manual_marking || {}),
-        show_score !== undefined ? show_score : true
+        id || null,
+        student_id || null,
+        assessment_id || null,
+        score || 0,
+        correct_answers || 0,
+        total_questions || 0,
+        status || 'pending',
+        JSON.stringify(answers || {}),
+        JSON.stringify(student_file || null),
+        feedback || null,
+        JSON.stringify(manual_marking || {})
       ]);
     res.status(201).json({ message: 'Result Saved' });
   } catch (error) { res.status(500).json({ message: error.message }); }
@@ -536,12 +537,12 @@ app.put('/api/results/:id', async (req, res) => {
   try {
     await pool.execute('UPDATE results SET status = ?, score = ?, correct_answers = ?, feedback = ?, manual_marking = ?, show_score = ? WHERE id = ?',
       [
-        status || 'pending', 
-        score || 0, 
-        correct_answers || 0, 
-        feedback || null, 
-        JSON.stringify(manual_marking || {}), 
-        show_score !== undefined ? show_score : true,
+        status || 'pending',
+        score || 0,
+        correct_answers || 0,
+        feedback || null,
+        JSON.stringify(manual_marking || {}),
+        show_score === undefined ? false : show_score,
         req.params.id
       ]);
     res.json({ message: 'Result Updated' });
@@ -584,17 +585,17 @@ app.post('/api/reg-requests', async (req, res) => {
   try {
     await pool.execute('INSERT INTO registration_requests (name, phone, email, role, admin_code, details) VALUES (?, ?, ?, ?, ?, ?)',
       [
-        name || null, 
-        phone || null, 
-        email || null, 
-        role || null, 
-        admin_code || null, 
+        name || null,
+        phone || null,
+        email || null,
+        role || null,
+        admin_code || null,
         details ? JSON.stringify(details) : null
       ]);
     res.status(201).json({ message: 'Request Submitted' });
-  } catch (error) { 
+  } catch (error) {
     logDebug(`Registration Request Error: ${error.message}`);
-    res.status(500).json({ message: error.message }); 
+    res.status(500).json({ message: error.message });
   }
 });
 

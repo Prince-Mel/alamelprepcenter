@@ -53,7 +53,7 @@ import { QuizInterface } from './QuizInterface';
 import { cn } from '@/lib/utils';
 import type { Student } from '../App';
 
-const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`;
+const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001`;
 
 interface StudentDashboardProps {
   user: Student;
@@ -119,8 +119,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
   const [profileData, setProfileData] = useState({
     name: user.name,
     id: user.id,
-    password: user.password,
-    showScores: user.details?.showScores ?? true
+    password: user.password
   });
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -218,12 +217,8 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
         !completedIds.includes(a.id) &&
         (!a.assigned_student_ids || a.assigned_student_ids.includes(user.id))
       );
-      if (relevant.length > 0) {
-        setFilteredAssessments(relevant);
-        setViewMode('assessment-list');
-      } else {
-        toast.info(`No new ${type} available.`);
-      }
+      setFilteredAssessments(relevant);
+      setViewMode('assessment-list');
     }
   };
 
@@ -236,10 +231,13 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
       score: score?.percentage || 0,
       correct_answers: score?.correct || 0,
       total_questions: score?.total || 0,
-      status: (activeAssessment.submission_mode === 'online') ? 'released' : 'pending',
+      status: 'pending',
       answers,
       student_file: file
     };
+
+    // Instantly append to state to prevent race conditions that let students retake assessments
+    setStudentResults(prev => [result, ...prev]);
 
     try {
       await fetch(`${API_URL}/api/results`, {
@@ -261,8 +259,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
       const updated = {
         ...user,
         name: profileData.name.toUpperCase(),
-        password: profileData.password,
-        details: { ...user.details, showScores: profileData.showScores }
+        password: profileData.password
       };
       const response = await fetch(`${API_URL}/api/students/${user.id}`, {
         method: 'PUT',
@@ -398,7 +395,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                   <Card className="border-none shadow-xl rounded-3xl p-4">
                     <CardHeader><CardTitle className="text-lg font-semibold flex items-center gap-2 uppercase tracking-tight"><Trophy className="text-emerald-500" /> Recent Results</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
-                      {studentResults.length > 0 ? studentResults.slice(0, 5).map(res => (
+                      {studentResults.filter(r => r.status === 'released').length > 0 ? studentResults.filter(r => r.status === 'released').slice(0, 5).map(res => (
                         <div key={res.id} className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between group hover:bg-white hover:shadow-md transition-all cursor-pointer">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-emerald-500 shadow-sm group-hover:scale-110 transition-transform">
@@ -423,7 +420,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                                 <div className="flex gap-0.5">
                                   {[1, 2, 3].map(i => <div key={i} className="w-1.5 h-1.5 rounded-full bg-gray-200" />)}
                                 </div>
-                                <p className="text-[8px] font-black text-gray-300 uppercase tracking-widest mt-1">Hidden</p>
+                                <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest mt-1">Hidden</p>
                               </div>
                             )}
                           </div>
@@ -615,6 +612,95 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                     </div>
                   )}
                 </div>
+
+                {/* ─── History Section ─── */}
+                {(() => {
+                  const typeKey = selectedMaterial === 'assignments' ? 'assignment' : selectedMaterial || '';
+                  const completedForType = studentResults.filter(r =>
+                    assessments.find(a => a.id === r.assessment_id && a.course_id === selectedCourse.id && a.type === typeKey)
+                  );
+                  if (completedForType.length === 0) return null;
+                  return (
+                    <div className="mt-16 animate-fade-in">
+                      <div className="flex items-center gap-4 mb-8">
+                        <div className="w-10 h-10 rounded-2xl bg-emerald-50 flex items-center justify-center text-emerald-500 shadow-sm">
+                          <Trophy className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight italic">
+                            Submission History
+                          </h3>
+                          <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-0.5">
+                            {typeKey.charAt(0).toUpperCase() + typeKey.slice(1)} Records — {selectedCourse.name}
+                          </p>
+                        </div>
+                        <div className="ml-auto bg-emerald-50 px-5 py-2 rounded-2xl border border-emerald-100">
+                          <span className="text-emerald-700 font-black text-xs uppercase tracking-widest">{completedForType.length} Submitted</span>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {completedForType.map((res: any) => {
+                          const isReleased = !!res.show_score;
+                          const score = res.score ?? 0;
+                          const scoreColor = score >= 70 ? 'text-emerald-600' : score >= 50 ? 'text-blue-600' : 'text-rose-600';
+                          const scoreBg = score >= 70 ? 'bg-emerald-50 border-emerald-100' : score >= 50 ? 'bg-blue-50 border-blue-100' : 'bg-rose-50 border-rose-100';
+                          return (
+                            <Card key={res.id} className="group overflow-hidden border-none shadow-lg hover:shadow-xl transition-all duration-300 rounded-[32px] bg-white">
+                              <div className={`h-2 ${isReleased ? (score >= 70 ? 'bg-gradient-to-r from-emerald-500 to-teal-500' : score >= 50 ? 'bg-gradient-to-r from-blue-500 to-indigo-500' : 'bg-gradient-to-r from-rose-500 to-pink-500') : 'bg-gradient-to-r from-gray-300 to-gray-400'}`} />
+                              <div className="p-6">
+                                {/* Title */}
+                                <div className="flex items-start justify-between gap-3 mb-5">
+                                  <div className="min-w-0">
+                                    <p className="text-xs text-blue-600 font-black uppercase tracking-widest mb-1">{typeKey}</p>
+                                    <h4 className="text-base font-black text-gray-800 uppercase tracking-tight line-clamp-2 group-hover:text-blue-600 transition-colors">
+                                      {res.assessment_title}
+                                    </h4>
+                                  </div>
+                                  {isReleased ? (
+                                    <div className={`shrink-0 min-w-[72px] text-center px-3 py-2 rounded-2xl border ${scoreBg}`}>
+                                      <p className={`text-2xl font-black tracking-tighter ${scoreColor}`}>{score}%</p>
+                                      <p className={`text-[8px] font-black uppercase tracking-widest ${scoreColor} opacity-70`}>Grade</p>
+                                    </div>
+                                  ) : (
+                                    <div className="shrink-0 min-w-[72px] text-center px-3 py-2 rounded-2xl border bg-gray-50 border-gray-100">
+                                      <div className="flex justify-center gap-0.5 mb-1">
+                                        {[1, 2, 3].map(i => <div key={i} className="w-1.5 h-1.5 rounded-full bg-gray-300" />)}
+                                      </div>
+                                      <p className="text-[8px] font-black uppercase tracking-widest text-gray-400">Pending</p>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Status & Feedback */}
+                                <div className="space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-[9px] font-black uppercase tracking-widest text-gray-400">Status</span>
+                                    <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full ${res.status === 'released' ? 'bg-emerald-100 text-emerald-600' : 'bg-amber-50 text-amber-500'}`}>
+                                      {res.status === 'released' ? 'Graded & Released' : 'Pending Review'}
+                                    </span>
+                                  </div>
+                                  {isReleased && res.feedback && (
+                                    <div className="mt-3 p-3 rounded-xl bg-blue-50 border border-blue-100">
+                                      <p className="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Instructor Feedback</p>
+                                      <p className="text-xs text-gray-600 font-medium leading-relaxed italic line-clamp-3">{res.feedback}</p>
+                                    </div>
+                                  )}
+                                  {!isReleased && (
+                                    <div className="mt-3 p-3 rounded-xl bg-amber-50 border border-amber-100 flex items-center gap-2">
+                                      <Clock className="w-3 h-3 text-amber-400 shrink-0" />
+                                      <p className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Awaiting instructor evaluation</p>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -709,18 +795,10 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
             <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-widest font-semibold ml-1">Identity ID</Label><Input value={profileData.id} disabled className="h-11 border-2 rounded-xl bg-gray-50 text-gray-400 font-semibold text-sm" /></div>
             <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-widest font-semibold ml-1">New Access Key</Label><Input type="password" value={profileData.password} onChange={e => setProfileData({ ...profileData, password: e.target.value })} className="h-11 rounded-xl border-2 font-semibold text-sm" /></div>
 
-            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 mt-6">
-              <div className="space-y-0.5">
-                <Label className="text-xs font-black uppercase tracking-tight flex items-center gap-2">
-                  {profileData.showScores ? <Eye className="w-4 h-4 text-blue-600" /> : <EyeOff className="w-4 h-4 text-gray-400" />}
-                  Score Visibility
-                </Label>
-                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-none">Show grades on dashboard</p>
-              </div>
-              <Switch
-                checked={profileData.showScores}
-                onCheckedChange={(checked) => setProfileData({ ...profileData, showScores: checked })}
-              />
+            <div className="p-4 bg-blue-50 rounded-2xl border-2 border-dashed border-blue-100 mt-6">
+              <p className="text-[9px] text-blue-600 font-black uppercase tracking-widest leading-relaxed text-center">
+                Grades are released by the administrator after evaluation.
+              </p>
             </div>
           </div>
           <DialogFooter className="mt-6 flex gap-3">

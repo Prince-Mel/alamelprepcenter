@@ -5,7 +5,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { 
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -15,10 +15,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { 
-  ChevronLeft, 
-  ChevronRight, 
-  Flag, 
+import {
+  ChevronLeft,
+  ChevronRight,
+  Flag,
   AlertTriangle,
   CheckCircle,
   BookOpen,
@@ -199,7 +199,7 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
 
   const handleSubmit = () => {
     const answeredCount = Object.keys(answers).length;
-    
+
     // For file submission mode, we warn if no file is uploaded but don't block
     if (assessment.submission_mode === 'file' && !studentUpload) {
       toast.warning('Warning: You have not uploaded any file for this submission.');
@@ -208,7 +208,7 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
     if (assessment.submission_mode === 'online' && answeredCount < totalQuestions) {
       toast.warning(`You have ${totalQuestions - answeredCount} unanswered questions!`);
     }
-    
+
     setShowSubmitDialog(true);
   };
 
@@ -258,47 +258,25 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <Card className="max-w-2xl w-full p-8 shadow-2xl border-none rounded-[40px] overflow-hidden relative">
           <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-600 to-emerald-400" />
-          
+
           <div className="text-center relative z-10">
             <div className="w-24 h-24 bg-gradient-to-br from-emerald-500 to-blue-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-xl rotate-12 floating">
               <Trophy className="w-12 h-12 text-white -rotate-12" />
             </div>
-            
+
             <CardTitle className="text-4xl font-black text-gray-900 mb-2 uppercase tracking-tight italic">
               {hasWrittenOrFile ? 'Submission Received!' : 'Results Analysis'}
             </CardTitle>
             <p className="text-gray-500 font-bold uppercase tracking-widest text-xs mb-10">
               {assessment.title} • {course.code}
             </p>
-            
-            {hasWrittenOrFile ? (
-              <div className="bg-blue-50/50 border-2 border-dashed border-blue-200 rounded-[32px] p-8 mb-8">
-                <p className="text-blue-900 font-black text-xl mb-3">CONGRATULATIONS!</p>
-                <p className="text-blue-700 font-bold text-sm leading-relaxed max-w-sm mx-auto">
-                  Your assessment has been successfully logged. Since this involves written components or file uploads, an instructor will manually review your work.
-                </p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-                <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 group hover:border-blue-500 transition-all duration-300">
-                  <p className="text-4xl font-black text-blue-600 group-hover:scale-110 transition-transform">{score.correct}</p>
-                  <p className="text-[10px] font-black text-gray-400 uppercase mt-2 tracking-widest">Correct</p>
-                </div>
-                <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 group hover:border-blue-500 transition-all duration-300">
-                  <p className="text-4xl font-black text-gray-800 group-hover:scale-110 transition-transform">{score.total}</p>
-                  <p className="text-[10px] font-black text-gray-400 uppercase mt-2 tracking-widest">Questions</p>
-                </div>
-                <div className="bg-gray-50 rounded-3xl p-6 border border-gray-100 group hover:border-emerald-500 transition-all duration-300">
-                  <p className={cn(
-                    "text-4xl font-black group-hover:scale-110 transition-transform",
-                    score.percentage >= 70 ? 'text-emerald-500' : score.percentage >= 50 ? 'text-blue-500' : 'text-rose-500'
-                  )}>
-                    {score.percentage}%
-                  </p>
-                  <p className="text-[10px] font-black text-gray-400 uppercase mt-2 tracking-widest">Final Grade</p>
-                </div>
-              </div>
-            )}
+
+            <div className="bg-emerald-50/50 border-2 border-dashed border-emerald-200 rounded-[32px] p-8 mb-8">
+              <p className="text-emerald-900 font-black text-xl mb-3">ASSESSMENT SUBMITTED!</p>
+              <p className="text-emerald-700 font-bold text-sm leading-relaxed max-w-sm mx-auto">
+                Your answers have been successfully logged. The final results will be displayed on your dashboard once graded by your instructor.
+              </p>
+            </div>
 
             <Button
               onClick={() => {
@@ -329,28 +307,28 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
           </div>
           {!isReviewMode && (
             <div className="hidden lg:flex items-center gap-2 ml-8 border-l border-gray-100 pl-8">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handlePrevious} 
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handlePrevious}
                 disabled={currentQuestionIdx === 0}
                 className="h-10 px-4 rounded-xl font-black text-[10px] uppercase tracking-widest text-gray-400 hover:text-blue-600 disabled:opacity-30"
               >
                 <ChevronLeft className="w-4 h-4 mr-1" /> Previous
               </Button>
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={handleNext} 
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleNext}
                 className="h-10 px-4 rounded-xl font-black text-[10px] uppercase tracking-widest text-gray-400 hover:text-blue-600"
               >
                 Next <ChevronRight className="w-4 h-4 ml-1" />
               </Button>
               {currentQuestionIdx === totalQuestions - 1 && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  onClick={handleSubmit} 
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleSubmit}
                   className="h-10 px-4 rounded-xl font-black text-[10px] uppercase tracking-widest text-gray-400 hover:text-rose-600"
                 >
                   Submit <Send className="w-4 h-4 ml-1" />
@@ -367,17 +345,17 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
               <p className="text-sm font-black text-gray-900">{stats.answeredCount} / {totalQuestions}</p>
             </div>
             <div className="w-32 h-2 bg-gray-100 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-blue-600 transition-all duration-700 ease-liquid" 
-                style={{ width: `${progress}%` }} 
+              <div
+                className="h-full bg-blue-600 transition-all duration-700 ease-liquid"
+                style={{ width: `${progress}%` }}
               />
             </div>
           </div>
-          
+
           <Timer duration={assessment.duration} onTimeUp={confirmSubmit} />
-          
-          <Button 
-            variant="ghost" 
+
+          <Button
+            variant="ghost"
             onClick={() => setShowCancelDialog(true)}
             className="w-12 h-12 rounded-2xl hover:bg-rose-50 hover:text-rose-600 text-gray-400"
           >
@@ -394,7 +372,7 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
             <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2">
               <List className="w-4 h-4" /> Question Navigator
             </h3>
-            
+
             <div className="grid grid-cols-5 gap-3">
               {questions.map((_, idx) => (
                 <button
@@ -408,10 +386,10 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
                     currentQuestionIdx === idx && !isReviewMode
                       ? "bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110 z-10"
                       : answers[idx] !== undefined
-                      ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
-                      : flaggedQuestions.includes(idx)
-                      ? "bg-amber-50 text-amber-600 border border-amber-100"
-                      : "bg-gray-50 text-gray-400 hover:bg-white hover:border-gray-200"
+                        ? "bg-emerald-50 text-emerald-600 border border-emerald-100"
+                        : flaggedQuestions.includes(idx)
+                          ? "bg-amber-50 text-amber-600 border border-amber-100"
+                          : "bg-gray-50 text-gray-400 hover:bg-white hover:border-gray-200"
                   )}
                 >
                   {idx + 1}
@@ -462,7 +440,7 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
                 <p className="text-gray-500 font-bold text-sm max-w-md mx-auto mb-10 leading-relaxed uppercase tracking-widest">
                   This task requires you to upload a file response. Please prepare your work and upload it below to proceed.
                 </p>
-                
+
                 <div className="max-w-md mx-auto p-8 bg-gray-50 rounded-[32px] border-2 border-dashed border-gray-200">
                   {studentUpload ? (
                     <div className="flex items-center justify-between bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
@@ -497,7 +475,7 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
                   )}
                 </div>
 
-                <Button 
+                <Button
                   onClick={handleSubmit}
                   className="mt-12 h-16 px-12 bg-blue-600 hover:bg-blue-700 text-white rounded-[24px] font-black text-sm uppercase tracking-[0.2em] shadow-xl shadow-blue-100 active:scale-95 transition-all w-full max-w-md mx-auto flex items-center justify-center gap-3"
                 >
@@ -529,8 +507,8 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
                       )}
                     </div>
                     <p className="text-sm font-bold text-gray-700 line-clamp-2 mb-4">{q.text}</p>
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       onClick={() => {
                         setCurrentQuestionIdx(idx);
                         setIsReviewMode(false);
@@ -566,9 +544,9 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
                             <p className="text-[10px] font-black text-emerald-500 uppercase">Ready to submit</p>
                           </div>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="icon" 
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           onClick={() => setStudentUpload(null)}
                           className="text-rose-500 hover:bg-rose-50 rounded-lg"
                         >
@@ -585,10 +563,10 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
                             <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Click to upload response file</p>
                           </div>
                         </Label>
-                        <Input 
-                          id="file-upload-review" 
-                          type="file" 
-                          className="hidden" 
+                        <Input
+                          id="file-upload-review"
+                          type="file"
+                          className="hidden"
                           onChange={handleFileUpload}
                           accept=".pdf,.doc,.docx,.zip,.jpg,.png"
                         />
@@ -598,14 +576,14 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
                 )}
 
                 <div className="flex flex-col sm:flex-row gap-4 max-w-md mx-auto">
-                  <Button 
-                    variant="outline" 
+                  <Button
+                    variant="outline"
                     onClick={() => setIsReviewMode(false)}
                     className="flex-1 h-14 rounded-2xl border-gray-100 font-black text-xs uppercase tracking-widest"
                   >
                     Keep Working
                   </Button>
-                  <Button 
+                  <Button
                     onClick={handleSubmit}
                     className="flex-1 h-14 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-emerald-100"
                   >
@@ -650,8 +628,8 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
                               onClick={() => handleAnswerSelect(index)}
                               className={cn(
                                 "relative group cursor-pointer p-6 rounded-[28px] border-2 transition-all duration-500 ease-expo overflow-hidden",
-                                isSelected 
-                                  ? "border-blue-600 bg-blue-50/50 shadow-xl shadow-blue-50" 
+                                isSelected
+                                  ? "border-blue-600 bg-blue-50/50 shadow-xl shadow-blue-50"
                                   : "border-gray-50 bg-gray-50/50 hover:border-blue-200 hover:bg-white"
                               )}
                             >
@@ -767,7 +745,7 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-10 gap-4">
             <AlertDialogCancel className="h-14 px-8 rounded-2xl border-gray-100 font-black text-xs uppercase tracking-widest">Review Work</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={confirmSubmit}
               className="h-14 px-10 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white border-none font-black text-xs uppercase tracking-widest shadow-xl shadow-blue-100"
             >
@@ -790,7 +768,7 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-10 gap-4">
             <AlertDialogCancel className="h-14 px-8 rounded-2xl border-gray-100 font-black text-xs uppercase tracking-widest">Resume Session</AlertDialogCancel>
-            <AlertDialogAction 
+            <AlertDialogAction
               onClick={() => {
                 clearQuizStorage();
                 onCancel();
