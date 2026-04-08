@@ -170,6 +170,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   // Assessment Form
   const [selectedCourse, setSelectedCourse] = useState('');
   const [assessmentTitle, setAssessmentTitle] = useState('');
+  const [assessmentType, setAssessmentType] = useState<'quiz' | 'examination' | 'assignment'>('examination');
   const [duration, setDuration] = useState(30);
   const [endDate, setEndDate] = useState('');
   const [assignedStudents, setAssignedStudents] = useState<string[]>([]);
@@ -338,7 +339,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
     setIsDeploying(true);
     try {
       const modeToSend = globalAssessmentMode === 'objective' ? 'objectives' : globalAssessmentMode;
-      const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: 'quiz', title: assessmentTitle, mode: modeToSend, submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
+      const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: assessmentType, title: assessmentTitle, mode: modeToSend, submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
       const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
       if (res.ok) { fetchData(); toast.success('Published'); setAssessmentTitle(''); setNewAssessmentQuestions([]); }
       else {
@@ -660,6 +661,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                   <CardHeader className="p-0 mb-8"><CardTitle className="text-lg uppercase font-black italic text-white tracking-tighter">Assessment Config</CardTitle><CardDescription className="text-[10px] uppercase text-gray-500 font-black tracking-widest">Define test parameters</CardDescription></CardHeader>
                   <div className="space-y-6">
                     <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Module</Label><Select value={selectedCourse} onValueChange={setSelectedCourse}><SelectTrigger className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold"><SelectValue placeholder="Select Module" /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border">{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-bold text-gray-300">{c.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Mode of Assessment</Label><Select value={assessmentType} onValueChange={(v: any) => setAssessmentType(v)}><SelectTrigger className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold"><SelectValue placeholder="Select Mode" /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border"><SelectItem value="examination" className="font-bold text-gray-300">Examination</SelectItem><SelectItem value="assignment" className="font-bold text-gray-300">Assignment</SelectItem><SelectItem value="quiz" className="font-bold text-gray-300">Quiz</SelectItem></SelectContent></Select></div>
                     <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Title</Label><Input value={assessmentTitle} onChange={e => setAssessmentTitle(e.target.value)} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div>
                     <div className="grid grid-cols-1 gap-6"><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Deadline</Label><Input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Duration (Min)</Label><Input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div></div>
                     <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Audience</Label><MultiSelect options={studentOptions} selected={assignedStudents} onChange={setAssignedStudents} placeholder="Select identities..." /></div>
