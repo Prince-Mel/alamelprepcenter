@@ -72,7 +72,9 @@ import {
   FileText,
   Check,
   AlertCircle,
-  RotateCcw
+  RotateCcw,
+  Bell,
+  Send
 } from 'lucide-react';
 
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -142,6 +144,13 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   const [viewScope, setViewScope] = useState<'all' | 'direct'>('all');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [originalId, setOriginalId] = useState('');
+
+  // Announcements UI State
+  const [announcementText, setAnnouncementText] = useState('');
+  const [announcementScope, setAnnouncementScope] = useState<'all' | 'selected'>('all');
+  const [announcementStudents, setAnnouncementStudents] = useState<string[]>([]);
+  const [announcementType] = useState('general');
+  const [announcementSending, setAnnouncementSending] = useState(false);
 
   // Dialogs
   const [showAddDialog, setShowAddDialog] = useState(false);
@@ -387,6 +396,35 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
     }
   };
 
+  const handleSendAnnouncement = async () => {
+    if (!announcementText.trim()) return toast.error('Announcement message cannot be empty');
+    if (announcementScope === 'selected' && announcementStudents.length === 0) return toast.error('Select at least one student');
+    setAnnouncementSending(true);
+    try {
+      const res = await fetch(`${API_URL}/api/announcements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_ids: announcementScope === 'selected' ? announcementStudents : [],
+          target_type: announcementScope,
+          message: announcementText,
+          type: announcementType
+        })
+      });
+      if (res.ok) {
+        toast.success('Announcement broadcasted successfully');
+        setAnnouncementText('');
+        setAnnouncementStudents([]);
+      } else {
+        toast.error('Failed to send announcement');
+      }
+    } catch (e: any) {
+      toast.error('Network error sending announcement');
+    } finally {
+      setAnnouncementSending(false);
+    }
+  };
+
   const handleUpdateAdminProfile = async () => {
     const updated = { ...user, name: adminProfileData.name.toUpperCase(), password: adminProfileData.password, email: adminProfileData.email, contact: adminProfileData.contact };
     const res = await fetch(`${API_URL}/api/students/${user.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updated) });
@@ -456,6 +494,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
               { icon: Clock, label: 'Assessment', value: 'timer' },
               { icon: BookUser, label: 'Enrollment', value: 'course-assignment' },
               { icon: CheckCircle, label: 'Results', value: 'results' },
+              { icon: Bell, label: 'Announcements', value: 'announcements' },
               { icon: ActivityIcon, label: 'Activity', value: 'activity' },
               { icon: Key, label: 'Generator', value: 'generator' }
             ].map(item => (
@@ -736,6 +775,44 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                 ))}
               </div>
             </Card>
+          )}
+
+          {activeTab === 'announcements' && (
+            <div className="max-w-4xl mx-auto space-y-8 animate-fade-in py-10">
+              <div className="flex flex-col items-center mb-8">
+                <div className="w-20 h-20 bg-neon-cyan/10 text-neon-cyan rounded-3xl flex items-center justify-center mb-6 shadow-lg border border-neon-cyan/20"><Bell className="w-10 h-10" /></div>
+                <h2 className="text-3xl uppercase tracking-tighter text-white font-black italic">Broadcast Center</h2>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-2 font-black">Dispatch systemic announcements</p>
+              </div>
+
+              <Card className="rounded-[40px] border border-neon-border shadow-2xl p-10 bg-neon-card/50 backdrop-blur-md">
+                <div className="space-y-8">
+                  <div className="space-y-3">
+                    <Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Audience Scope</Label>
+                    <div className="flex bg-black/40 rounded-2xl p-1 border border-neon-border/50">
+                      <button onClick={() => setAnnouncementScope('all')} className={cn("flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", announcementScope === 'all' ? "bg-neon-cyan text-black shadow-[0_0_15px_rgba(0,242,255,0.4)]" : "text-gray-500 hover:text-gray-300")}>All Students</button>
+                      <button onClick={() => setAnnouncementScope('selected')} className={cn("flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", announcementScope === 'selected' ? "bg-neon-cyan text-black shadow-[0_0_15px_rgba(0,242,255,0.4)]" : "text-gray-500 hover:text-gray-300")}>Selected Identities</button>
+                    </div>
+                  </div>
+
+                  {announcementScope === 'selected' && (
+                    <div className="space-y-3 animate-fade-in">
+                      <Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Select Identities Target</Label>
+                      <MultiSelect options={students.map(s => ({ label: s.name, value: s.id }))} selected={announcementStudents} onChange={setAnnouncementStudents} placeholder="Select target students..." />
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Message Detail</Label>
+                    <Textarea value={announcementText} onChange={(e) => setAnnouncementText(e.target.value)} className="min-h-[200px] rounded-[24px] border-neon-border bg-black/40 text-sm p-6 font-bold text-gray-200 resize-none placeholder:text-gray-700 focus:border-neon-cyan shadow-inner" placeholder="Enter broadcast transmission..." />
+                  </div>
+
+                  <Button onClick={handleSendAnnouncement} disabled={announcementSending} className="w-full h-16 bg-neon-cyan text-black rounded-[24px] shadow-xl transition-all text-xs font-black uppercase tracking-[0.2em] italic hover:scale-[1.02] mt-4 flex justify-center items-center gap-3">
+                    {announcementSending ? <RotateCcw className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {announcementSending ? 'TRANSMITTING...' : 'DISPATCH BROADCAST'}
+                  </Button>
+                </div>
+              </Card>
+            </div>
           )}
 
           {activeTab === 'generator' && (

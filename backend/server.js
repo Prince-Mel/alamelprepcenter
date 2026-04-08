@@ -572,9 +572,22 @@ app.get('/api/announcements/:student_id', async (req, res) => {
 });
 
 app.post('/api/announcements', async (req, res) => {
-  const { id, student_id, message, type } = req.body;
+  const { id, student_id, student_ids, target_type, message, type } = req.body;
   try {
-    await pool.execute('INSERT INTO announcements (id, student_id, message, type) VALUES (?, ?, ?, ?)', [id || null, student_id || null, message || null, type || 'general']);
+    let targets = [];
+    if (target_type === 'all' || student_id === 'all') {
+      const [users] = await pool.execute('SELECT id FROM users WHERE role = "student"');
+      targets = users.map(u => u.id);
+    } else if (student_ids && Array.isArray(student_ids)) {
+      targets = student_ids;
+    } else if (student_id) {
+      targets = [student_id];
+    }
+    
+    for (const tId of targets) {
+       const uId = `ANN${Date.now()}${Math.floor(Math.random() * 1000)}`;
+       await pool.execute('INSERT INTO announcements (id, student_id, message, type) VALUES (?, ?, ?, ?)', [uId, tId || null, message || null, type || 'general']);
+    }
     res.status(201).json({ message: 'Sent' });
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
