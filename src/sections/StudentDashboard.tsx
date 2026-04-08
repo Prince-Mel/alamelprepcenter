@@ -87,11 +87,12 @@ interface Assessment {
 
 interface CalendarEvent {
   id: string;
-  type: 'assessment' | 'announcement';
+  type: string;
   title: string;
   date: Date;
   courseName?: string;
   details: string;
+  isCompleted?: boolean;
 }
 
 type ViewMode = 'home' | 'courses' | 'materials' | 'quiz' | 'calendar' | 'announcements' | 'settings' | 'assessment-list';
@@ -172,14 +173,32 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
 
   const eventsByDate = useMemo(() => {
     const events = new Map<string, CalendarEvent[]>();
+    const completedIds = studentResults.map(r => r.assessment_id);
+
     assessments.forEach(asmt => {
-      if (asmt.end_date && (asmt.assigned_student_ids?.includes(user.id) || !asmt.assigned_student_ids)) {
+      const assigned = asmt.assigned_student_ids;
+      const isForMe = !assigned || assigned.length === 0 || assigned === '[]' || assigned.includes(user.id);
+      const isEnrolled = enrolledCourseIds.includes(asmt.course_id);
+
+      if (asmt.end_date && isForMe && isEnrolled) {
         const date = parseISO(asmt.end_date);
         const key = format(date, 'yyyy-MM-dd');
         if (!events.has(key)) events.set(key, []);
-        events.get(key)?.push({ id: asmt.id, type: 'assessment', title: asmt.title, date, details: `Due: ${format(date, 'p')}` });
+        
+        const isCompleted = completedIds.includes(asmt.id);
+        const course = courses.find(c => c.id === asmt.course_id);
+
+        events.get(key)?.push({ 
+          id: asmt.id, 
+          type: asmt.type, 
+          title: asmt.title, 
+          date, 
+          details: `Module: ${course?.code || ''} • Status: ${isCompleted ? 'Completed' : 'Pending'}`,
+          isCompleted 
+        });
       }
     });
+
     announcements.forEach(ann => {
       const date = parseISO(ann.timestamp);
       const key = format(date, 'yyyy-MM-dd');
@@ -187,7 +206,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
       events.get(key)?.push({ id: ann.id, type: 'announcement', title: 'Announcement', date, details: ann.message });
     });
     return events;
-  }, [assessments, announcements, user.id]);
+  }, [assessments, announcements, user.id, enrolledCourseIds, courses, studentResults]);
 
   const eventDays = useMemo(() => {
     return Array.from(eventsByDate.keys()).map(dateStr => parseISO(dateStr));
@@ -757,11 +776,13 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                     {selectedDateEvents.length > 0 ? selectedDateEvents.map(ev => (
                       <div key={ev.id} className="p-6 rounded-[24px] bg-gray-50/50 border-2 border-transparent hover:border-blue-500 hover:bg-white transition-all duration-300 group flex justify-between items-center shadow-sm">
                         <div className="flex gap-6 items-center">
-                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110 ${ev.type === 'assessment' ? 'bg-red-500 text-white shadow-red-200' : 'bg-blue-600 text-white shadow-blue-200'}`}>
-                            {ev.type === 'assessment' ? <Clock className="w-6 h-6 stroke-[2.5px]" /> : <Bell className="w-6 h-6 stroke-[2.5px]" />}
+                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg transition-transform group-hover:scale-110 ${ev.type !== 'announcement' ? (ev.isCompleted ? 'bg-emerald-500 text-white shadow-emerald-200' : 'bg-rose-500 text-white shadow-rose-200') : 'bg-blue-600 text-white shadow-blue-200'}`}>
+                            {ev.type !== 'announcement' ? (ev.isCompleted ? <CheckCircle className="w-6 h-6 stroke-[2.5px]" /> : <Clock className="w-6 h-6 stroke-[2.5px]" />) : <Bell className="w-6 h-6 stroke-[2.5px]" />}
                           </div>
                           <div>
-                            <p className="text-base font-black text-gray-900 uppercase tracking-tight mb-1">{ev.title}</p>
+                            <p className="text-base font-black text-gray-900 uppercase tracking-tight mb-1 flex items-center gap-2">
+                              {ev.title} {ev.type !== 'announcement' && <Badge className={`text-[9px] border-none uppercase tracking-widest ${ev.isCompleted ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>{ev.type}</Badge>}
+                            </p>
                             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-relaxed max-w-md">{ev.details}</p>
                           </div>
                         </div>
