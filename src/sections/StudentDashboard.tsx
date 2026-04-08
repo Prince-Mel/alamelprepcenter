@@ -176,8 +176,8 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
     const completedIds = studentResults.map(r => r.assessment_id);
 
     assessments.forEach(asmt => {
-      const assigned = asmt.assigned_student_ids;
-      const isForMe = !assigned || assigned.length === 0 || assigned === '[]' || assigned.includes(user.id);
+      const assigned = asmt.assigned_student_ids as any;
+      const isForMe = !assigned || assigned.length === 0 || assigned === '[]' || (Array.isArray(assigned) ? assigned.includes(user.id) : typeof assigned === 'string' && assigned.includes(user.id));
       const isEnrolled = enrolledCourseIds.includes(asmt.course_id);
 
       if (asmt.end_date && isForMe && isEnrolled) {
