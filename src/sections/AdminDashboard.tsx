@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -137,9 +138,25 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   const [isLoading, setIsLoading] = useState(true);
   const [isDeploying, setIsDeploying] = useState(false);
 
+  const { tab } = useParams();
+  const navigate = useNavigate();
+
   // UI State
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState('students');
+  const [activeTab, setActiveTab] = useState(tab || 'students');
+
+  useEffect(() => {
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+    } else if (!tab) {
+      navigate('/admin/students', { replace: true });
+    }
+  }, [tab, activeTab, navigate]);
+
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    navigate(`/admin/${newTab}`);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [viewScope, setViewScope] = useState<'all' | 'direct'>('all');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -500,7 +517,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
             ].map(item => (
               <button
                 key={item.value}
-                onClick={() => { setActiveTab(item.value); if (isMobile) setMobileMenuOpen(false); }}
+                onClick={() => { handleTabChange(item.value); if (isMobile) setMobileMenuOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all relative group ${activeTab === item.value ? 'bg-neon-cyan/10 text-neon-cyan shadow-[inset_0_0_15px_rgba(0,242,255,0.1)] border border-neon-cyan/30' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}
               >
                 {activeTab === item.value && <div className="absolute left-0 w-1 h-6 bg-neon-cyan rounded-r-full shadow-[0_0_10px_#00f2ff]" />}
@@ -573,7 +590,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                   <TableHeader className="bg-black/40"><TableRow className="hover:bg-transparent border-neon-border/50"><TableHead className="px-8 py-6 uppercase text-[10px] font-black tracking-widest text-neon-cyan">Identity</TableHead><TableHead className="uppercase text-[10px] text-center font-black tracking-widest text-neon-cyan">Status</TableHead><TableHead className="text-right px-8 uppercase text-[10px] font-black tracking-widest text-neon-cyan">Action</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {filteredStudents.map(s => (
-                      <TableRow key={s.id} className="hover:bg-neon-cyan/5 cursor-pointer border-neon-border/30 transition-colors group" onClick={() => { setSelectedStudent(s); setOriginalId(s.id); setActiveTab('student-workspace'); }}>
+                      <TableRow key={s.id} className="hover:bg-neon-cyan/5 cursor-pointer border-neon-border/30 transition-colors group" onClick={() => { setSelectedStudent(s); setOriginalId(s.id); handleTabChange('student-workspace'); }}>
                         <TableCell className="px-8 py-6 flex items-center gap-4"><div className="w-10 h-10 rounded-lg bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center text-neon-cyan font-black text-xs shadow-inner">{s.id.slice(-2)}</div><div><p className="text-white text-sm font-bold tracking-tight">{s.name}</p><p className="text-[10px] text-gray-500 uppercase font-black tracking-widest group-hover:text-neon-cyan/70 transition-colors">{s.id}</p></div></TableCell>
                         <TableCell className="text-center">{getStatusBadge(s.status)}</TableCell>
                         <TableCell className="text-right px-8"><Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSelectedStudent(s); setShowDeleteDialog(true); }} className="text-neon-pink/50 hover:text-neon-pink hover:bg-neon-pink/10 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></Button></TableCell>
@@ -588,7 +605,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
           {activeTab === 'student-workspace' && selectedStudent && (
             <div className="space-y-8 animate-fade-in">
               <div className="flex items-center justify-between mb-2">
-                <button onClick={() => setActiveTab('students')} className="text-neon-cyan uppercase text-[10px] font-black tracking-widest flex items-center hover:opacity-70 transition-opacity"><ChevronLeft className="w-4 h-4 mr-2" /> Back to Students</button>
+                <button onClick={() => handleTabChange('students')} className="text-neon-cyan uppercase text-[10px] font-black tracking-widest flex items-center hover:opacity-70 transition-opacity"><ChevronLeft className="w-4 h-4 mr-2" /> Back to Students</button>
                 <div className="flex gap-3">
                   <Button onClick={() => setShowEditDialog(true)} className="bg-neon-card text-neon-cyan border border-neon-cyan/30 rounded-2xl h-10 px-6 text-[10px] font-black tracking-widest uppercase hover:bg-neon-cyan/10 transition-all"><Settings className="w-4 h-4 mr-2" /> Edit Profile</Button>
                   <Button onClick={handleDeleteStudent} className="bg-neon-pink/10 text-neon-pink border border-neon-pink/30 rounded-2xl h-10 px-6 text-[10px] font-black tracking-widest uppercase hover:bg-neon-pink/20 transition-all"><Trash2 className="w-4 h-4 mr-2" /> Expel</Button>

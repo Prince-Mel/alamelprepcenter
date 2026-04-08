@@ -1,4 +1,5 @@
 import { useState, useEffect, Component, type ReactNode } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { LoginScreen } from './sections/LoginScreen';
 import { StudentDashboard } from './sections/StudentDashboard';
 import { AdminDashboard } from './sections/AdminDashboard';
@@ -126,6 +127,8 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 function App() {
+  const navigate = useNavigate();
+  
   const [currentUser, setCurrentUser] = useState<Student | User | null>(() => {
     try {
       const savedUser = sessionStorage.getItem('alamel_user');
@@ -136,32 +139,6 @@ function App() {
     }
   });
 
-  const [currentView, setCurrentView] = useState<View>(() => {
-    try {
-      const savedUser = sessionStorage.getItem('alamel_user');
-      if (!savedUser) return 'login';
-
-      const savedView = sessionStorage.getItem('alamel_current_view');
-      if (savedView) return savedView as View;
-
-      const user = JSON.parse(savedUser);
-      return user.role === 'admin' || user.role === 'sub-admin' ? 'admin' : 'student';
-    } catch (e) {
-      console.error("Failed to parse view from sessionStorage", e);
-    }
-    return 'login';
-  });
-
-  useEffect(() => {
-    if (currentView !== 'login' && !currentUser) {
-      setCurrentView('login');
-    }
-  }, [currentView, currentUser]);
-
-  useEffect(() => {
-    sessionStorage.setItem('alamel_current_view', currentView);
-  }, [currentView]);
-
   const handleLogin = (user: Student | User) => {
     const now = new Date().toLocaleString();
     const updatedUser = { ...user, last_login: now };
@@ -169,17 +146,18 @@ function App() {
     setCurrentUser(updatedUser);
     sessionStorage.setItem('alamel_user', JSON.stringify(updatedUser));
 
-    setCurrentView(user.role === 'admin' || user.role === 'sub-admin' ? 'admin' : 'student');
+    if (user.role === 'admin' || user.role === 'sub-admin') {
+      navigate('/admin');
+    } else {
+      navigate('/student');
+    }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     sessionStorage.removeItem('alamel_user');
-    setCurrentView('login');
+    navigate('/login');
   };
-
-  const switchToAdmin = () => setCurrentView('admin');
-  const switchToStudent = () => setCurrentView('student');
 
   const handleUpdateUser = (updatedUser: User | Student, oldId?: string) => {
     setCurrentUser(updatedUser);
@@ -194,38 +172,44 @@ function App() {
         {currentUser?.status === 'inactive' ? (
           <DeactivatedAccountView user={currentUser} onLogout={handleLogout} />
         ) : (
-          <>
-            {currentView === 'login' && (
-              <LoginScreen onLogin={handleLogin} />
-            )}
+          <Routes>
+            <Route path="/login" element={
+              !currentUser ? <LoginScreen onLogin={handleLogin} /> : <Navigate to={currentUser.role === 'student' ? '/student' : '/admin'} replace />
+            } />
 
-            {currentView === 'student' && currentUser && (
-              <StudentDashboard
-                user={currentUser as Student}
-                onLogout={handleLogout}
-                onSwitchToAdmin={switchToAdmin}
-                onUpdateUser={handleUpdateUser}
-              />
-            )}
-
-            {currentView === 'admin' && currentUser && (
-              currentUser.id.toUpperCase() === 'ADMIN' ? (
-                <AdminDashboard
-                  user={currentUser}
+            <Route path="/student/:tab?" element={
+              currentUser && currentUser.role === 'student' ? (
+                <StudentDashboard
+                  user={currentUser as Student}
                   onLogout={handleLogout}
-                  onSwitchToStudent={switchToStudent}
+                  onSwitchToAdmin={() => navigate('/admin')}
                   onUpdateUser={handleUpdateUser}
                 />
-              ) : (
-                <SubAdminDashboard
-                  user={currentUser}
-                  onLogout={handleLogout}
-                  onSwitchToStudent={switchToStudent}
-                  onUpdateUser={handleUpdateUser}
-                />
-              )
-            )}
-          </>
+              ) : <Navigate to="/login" replace />
+            } />
+
+            <Route path="/admin/:tab?" element={
+              currentUser && (currentUser.role === 'admin' || currentUser.role === 'sub-admin') ? (
+                currentUser.id.toUpperCase() === 'ADMIN' ? (
+                  <AdminDashboard
+                    user={currentUser}
+                    onLogout={handleLogout}
+                    onSwitchToStudent={() => navigate('/student')}
+                    onUpdateUser={handleUpdateUser}
+                  />
+                ) : (
+                  <SubAdminDashboard
+                    user={currentUser}
+                    onLogout={handleLogout}
+                    onSwitchToStudent={() => navigate('/student')}
+                    onUpdateUser={handleUpdateUser}
+                  />
+                )
+              ) : <Navigate to="/login" replace />
+            } />
+
+            <Route path="*" element={<Navigate to={currentUser ? (currentUser.role === 'student' ? '/student' : '/admin') : '/login'} replace />} />
+          </Routes>
         )}
       </div>
     </ErrorBoundary>

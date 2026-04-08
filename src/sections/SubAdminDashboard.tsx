@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -122,9 +123,25 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const [isLoading, setIsLoading] = useState(true);
   const [isDeploying, setIsDeploying] = useState(false);
 
+  const { tab } = useParams();
+  const navigate = useNavigate();
+
   // UI State
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState('students');
+  const [activeTab, setActiveTab] = useState(tab || 'students');
+
+  useEffect(() => {
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+    } else if (!tab) {
+      navigate('/admin/students', { replace: true });
+    }
+  }, [tab, activeTab, navigate]);
+
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    navigate(`/admin/${newTab}`);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
 
@@ -425,7 +442,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
               .map(item => (
                 <button
                   key={item.value}
-                  onClick={() => { setActiveTab(item.value); if (isMobile) setMobileMenuOpen(false); }}
+                  onClick={() => { handleTabChange(item.value); if (isMobile) setMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all relative group ${activeTab === item.value ? 'bg-neon-cyan/10 text-neon-cyan shadow-[inset_0_0_15px_rgba(0,242,255,0.1)] border border-neon-cyan/30' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}
                 >
                   {activeTab === item.value && <div className="absolute left-0 w-1 h-6 bg-neon-cyan rounded-r-full shadow-[0_0_10px_#00f2ff]" />}
@@ -508,7 +525,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                   </TableHeader>
                   <TableBody>
                     {filteredStudents.map(s => (
-                      <TableRow key={s.id} className="hover:bg-neon-cyan/5 cursor-pointer border-neon-border/30 transition-colors group" onClick={() => { setSelectedStudent(s); setActiveTab('student-workspace'); }}>
+                      <TableRow key={s.id} className="hover:bg-neon-cyan/5 cursor-pointer border-neon-border/30 transition-colors group" onClick={() => { setSelectedStudent(s); handleTabChange('student-workspace'); }}>
                         <TableCell className="px-10 py-8">
                           <div className="flex items-center gap-5">
                             <div className="w-14 h-14 rounded-2xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center text-neon-cyan font-black text-lg shadow-inner">
@@ -536,7 +553,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
 
           {activeTab === 'student-workspace' && selectedStudent && (
             <div className="space-y-8 animate-fade-in">
-              <button onClick={() => setActiveTab('students')} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neon-cyan hover:opacity-70 transition-all"><ChevronLeft className="w-4 h-4" /> BACK TO RECORDS</button>
+              <button onClick={() => handleTabChange('students')} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neon-cyan hover:opacity-70 transition-all"><ChevronLeft className="w-4 h-4" /> BACK TO RECORDS</button>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <Card className="rounded-[32px] p-8 border border-neon-border bg-neon-cyan/5 text-white relative overflow-hidden h-full shadow-[inset_0_0_30px_rgba(0,242,255,0.05)]">
                   <div className="absolute -right-10 -bottom-10 w-48 h-48 opacity-5 rotate-12 bg-neon-cyan rounded-full blur-3xl" />

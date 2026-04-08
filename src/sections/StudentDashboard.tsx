@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -109,8 +110,24 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
+  const { tab } = useParams();
+  const navigate = useNavigate();
+
   // UI State
-  const [viewMode, setViewMode] = useState<ViewMode>('home');
+  const [viewMode, setViewMode] = useState<ViewMode>((tab as ViewMode) || 'home');
+
+  useEffect(() => {
+    if (tab && tab !== viewMode) {
+      setViewMode(tab as ViewMode);
+    } else if (!tab) {
+      navigate('/student/home', { replace: true });
+    }
+  }, [tab, viewMode, navigate]);
+
+  const handleViewChange = (newView: ViewMode) => {
+    setViewMode(newView);
+    navigate(`/student/${newView}`);
+  };
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
   const [selectedMaterial, setSelectedMaterial] = useState<MaterialType | null>(null);
   const [activeAssessment, setActiveAssessment] = useState<Assessment | null>(null);
@@ -221,7 +238,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
   // Handlers
   const handleCourseSelect = (course: Course) => {
     setSelectedCourse(course);
-    setViewMode('materials');
+    handleViewChange('materials');
     setSelectedMaterial(null);
   };
 
@@ -237,7 +254,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
         (!a.assigned_student_ids || a.assigned_student_ids.includes(user.id))
       );
       setFilteredAssessments(relevant);
-      setViewMode('assessment-list');
+      handleViewChange('assessment-list');
     }
   };
 
@@ -269,7 +286,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
     } catch (e) {
       toast.error('Submission failed');
     }
-    setViewMode('materials');
+    handleViewChange('materials');
     setActiveAssessment(null);
   };
 
@@ -332,7 +349,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
               .map(item => (
                 <button
                   key={item.id}
-                  onClick={() => { setViewMode(item.id as any); if (isMobile) setMobileMenuOpen(false); }}
+                  onClick={() => { handleViewChange(item.id as any); if (isMobile) setMobileMenuOpen(false); }}
                   className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${viewMode === item.id ? 'bg-blue-50 text-blue-600 shadow-sm font-semibold' : 'text-gray-500 hover:bg-gray-50'}`}
                 >
                   <item.icon className="w-5 h-5" />
@@ -545,15 +562,15 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
             )}
 
             {viewMode === 'materials' && selectedCourse && (
-              <CourseMaterials course={selectedCourse} selectedMaterial={selectedMaterial} onMaterialSelect={handleMaterialSelect} onBack={() => setViewMode('courses')} user={user} results={studentResults} assessments={assessments} />
+              <CourseMaterials course={selectedCourse} selectedMaterial={selectedMaterial} onMaterialSelect={handleMaterialSelect} onBack={() => handleViewChange('courses')} user={user} results={studentResults} assessments={assessments} />
             )}
 
             {viewMode === 'assessment-list' && selectedCourse && (
               <div className="space-y-10 animate-fade-in max-w-5xl mx-auto font-arial">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                   <div>
-                    <Button variant="ghost" onClick={() => setViewMode('materials')} className="text-gray-400 hover:text-blue-600 mb-4 font-black text-[10px] uppercase tracking-[0.2em] p-0 h-auto group">
-                      <ChevronRight className="rotate-180 w-4 h-4 mr-1 group-hover:-translate-x-1 transition-transform" /> Back to Materials
+                    <Button variant="ghost" onClick={() => handleViewChange('materials')} className="text-gray-400 hover:text-blue-600 mb-4 font-black text-[10px] uppercase tracking-[0.2em] p-0 h-auto group">
+                      <ChevronRight className="rotate-180 w-4 h-4 mr-1 group-hover:-translate-x-1 transition-transform" /> Back to Sections
                     </Button>
                     <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight italic flex items-center gap-4">
                       <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-100">
@@ -612,7 +629,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                         </div>
 
                         <Button
-                          onClick={() => { setActiveAssessment(asmt); setViewMode('quiz'); }}
+                          onClick={() => { setActiveAssessment(asmt); handleViewChange('quiz'); }}
                           className="w-full h-16 bg-gray-900 hover:bg-blue-600 text-white rounded-[24px] font-black text-xs uppercase tracking-[0.2em] shadow-xl transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 group/btn"
                         >
                           Access Assessment <ChevronRight className="w-4 h-4 group-hover/btn:translate-x-2 transition-transform" />
@@ -731,7 +748,8 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                   course={selectedCourse}
                   onComplete={handleAssessmentComplete}
                   onCancel={() => {
-                    setViewMode('materials');
+                    setViewMode('materials'); // Internal sync for quiz state
+                    handleViewChange('materials');
                     setActiveAssessment(null);
                   }}
                 />
