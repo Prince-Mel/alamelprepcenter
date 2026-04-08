@@ -514,6 +514,13 @@ app.get('/api/results/:student_id', async (req, res) => {
 app.post('/api/results', async (req, res) => {
   const { id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking } = req.body;
   try {
+    const [existing] = await pool.execute('SELECT id FROM results WHERE student_id = ? AND assessment_id = ?', [student_id || null, assessment_id || null]);
+    if (existing.length > 0) {
+      await pool.execute('UPDATE results SET score=?, correct_answers=?, status=?, answers=?, student_file=?, feedback=?, manual_marking=? WHERE id=?',
+        [score || 0, correct_answers || 0, status || 'pending', JSON.stringify(answers || {}), JSON.stringify(student_file || null), feedback || null, JSON.stringify(manual_marking || {}), existing[0].id]);
+      return res.status(200).json({ message: 'Result Updated' });
+    }
+
     await pool.execute('INSERT INTO results (id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
       [
         id || null,
@@ -636,6 +643,58 @@ app.post('/api/activity', async (req, res) => {
     res.status(201).json({ message: 'Logged' });
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
+
+// --- AUTO-SUBMIT EXPIRED ASSESSMENTS ---
+setInterval(async () => {
+  try {
+    const [expiredAssessments] = await pool.execute(
+      'SELECT * FROM assessments WHERE end_date IS NOT NULL AND end_date <= NOW()'
+    );
+    
+    for (const assessment of expiredAssessments) {
+      let eligibleStudents = [];
+      let parsedAssigned = [];
+      if (assessment.assigned_student_ids && assessment.assigned_student_ids !== '[]') {
+         try { parsedAssigned = JSON.parse(assessment.assigned_student_ids); } catch (e) {}
+      }
+      
+      if (parsedAssigned.length > 0) {
+         eligibleStudents = parsedAssigned;
+      } else {
+         const [enrolls] = await pool.execute('SELECT student_id FROM enrollments WHERE course_id = ?', [assessment.course_id]);
+         eligibleStudents = enrolls.map(e => e.student_id);
+      }
+      
+      for (const studentId of eligibleStudents) {
+         const [existing] = await pool.execute('SELECT id FROM results WHERE student_id = ? AND assessment_id = ?', [studentId, assessment.id]);
+         if (existing.length === 0) {
+            const id = `R${Date.now()}${Math.floor(Math.random() * 10000)}`;
+            let totalQ = 0;
+            if (assessment.structured_questions) {
+              try { totalQ = typeof assessment.structured_questions === 'string' ? JSON.parse(assessment.structured_questions).length : assessment.structured_questions.length; } catch (e) {}
+            }
+            await pool.execute('INSERT INTO results (id, student_id, assessment_id, score, correct_answers, total_questions, status, answers, student_file, feedback, manual_marking) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+              [
+                id,
+                studentId,
+                assessment.id,
+                0,
+                0,
+                totalQ,
+                'pending',
+                '{}',
+                'null',
+                'Auto-submitted due to deadline passed.',
+                '{}'
+              ]);
+            logDebug(`[Auto-Submit] Submitted score 0 for student ${studentId} on missed assessment ${assessment.id}`);
+         }
+      }
+    }
+  } catch (error) {
+    logDebug(`[Auto-Submit Error] ${error.message}`);
+  }
+}, 60000); // Check every 60 seconds
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, async () => {

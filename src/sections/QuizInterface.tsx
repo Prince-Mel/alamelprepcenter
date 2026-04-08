@@ -59,6 +59,7 @@ interface Assessment {
   question_file_name?: string;
   structured_questions: Question[];
   duration: number;
+  end_date?: string;
 }
 
 interface Course {
@@ -139,6 +140,30 @@ export function QuizInterface({ assessment, course, onComplete, onCancel }: Quiz
     localStorage.removeItem(`alamel_quiz_flagged_${assessment.id}`);
     localStorage.removeItem(`alamel_quiz_results_${assessment.id}`);
   };
+
+  // Auto-submit if deadline is reached
+  useEffect(() => {
+    if (!assessment.end_date) return;
+    
+    const interval = setInterval(() => {
+      if (showResults) return;
+      
+      let endStr = assessment.end_date as string;
+      if (typeof endStr === 'string' && !endStr.includes('T')) {
+         endStr = endStr.replace(' ', 'T');
+      }
+      
+      const now = new Date();
+      const deadline = new Date(endStr);
+      
+      if (now >= deadline) {
+        toast.warning("The deadline has passed! Auto-submitting assessment...");
+        confirmSubmit();
+      }
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [assessment.end_date, showResults]);
 
   const handleAnswerSelect = (answerIndex: number) => {
     setAnswers((prev) => ({ ...prev, [currentQuestionIdx]: answerIndex }));
