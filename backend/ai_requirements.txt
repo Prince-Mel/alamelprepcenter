@@ -1,0 +1,12 @@
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+python-multipart==0.0.24
+ddgs==9.13.0
+google-genai==1.71.0
+google-generativeai==0.8.6
+openai==2.26.0
+python-dotenv==1.0.1
+PyPDF2==3.0.1
+youtube-transcript-api==1.2.4
+yt-dlp==2026.3.17

@@ -309,11 +309,30 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   };
 
   const handleUpdateResult = async () => {
-    if (!selectedResult) return;
+    if (!selectedResult) {
+      toast.error('No result selected');
+      return;
+    }
     try {
-      const res = await fetch(`${API_URL}/api/results/${selectedResult.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ score: markingScore, status: markingStatus, show_score: markingShowScore }) });
-      if (res.ok) { fetchData(); setShowMarkDialog(false); toast.success('Updated'); }
-    } catch (e) { toast.error('Update failed'); }
+      console.log('Updating result:', selectedResult.id, { score: markingScore, status: markingStatus, show_score: markingShowScore });
+      const res = await fetch(`${API_URL}/api/results/${selectedResult.id}`, { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ score: markingScore, status: markingStatus, show_score: markingShowScore }) 
+      });
+      if (res.ok) { 
+        fetchData(); 
+        setShowMarkDialog(false); 
+        toast.success('Result Updated Successfully'); 
+      } else {
+        const errorData = await res.json();
+        console.error('Server error:', errorData);
+        toast.error(`Update failed: ${errorData.message || res.statusText}`);
+      }
+    } catch (e: any) { 
+      console.error('Network or logic error:', e);
+      toast.error(`Error: ${e.message || 'Unknown error'}`); 
+    }
   };
 
   const handleUpdateAdminProfile = async () => {

@@ -52,6 +52,7 @@ interface CourseMaterialsProps {
   selectedMaterial: MaterialType | null;
   onMaterialSelect: (type: MaterialType) => void;
   onBack: () => void;
+  onBackToGrid: () => void;
   user: Student | User; // Changed from userRole
   results: any[];
   assessments: any[];
@@ -111,7 +112,7 @@ const materialConfig = {
   },
 };
 
-export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, onBack, user, results, assessments }: CourseMaterialsProps) {
+export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, onBack, onBackToGrid, user, results, assessments }: CourseMaterialsProps) {
   const materials: MaterialType[] = ['textbooks', 'videos', 'quiz', 'examination', 'pastQuestions', 'assignments'];
   const userRole = user.role;
   const [uploadedMaterials, setUploadedMaterials] = useState<UploadedMaterial[]>([]);
@@ -370,7 +371,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
   }
 
   if (showAIMode && selectedMaterial) {
-    return <AIMode type={selectedMaterial} onClose={() => setShowAIMode(false)} />;
+    return <AIMode type={selectedMaterial} onClose={() => setShowAIMode(false)} courseInfo={course.name} userName={user.name} />;
   }
 
   // Filter results for this course and material type
@@ -399,11 +400,11 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
       {/* Back Button */}
       <Button
         variant="ghost"
-        onClick={onBack}
+        onClick={selectedMaterial ? onBackToGrid : onBack}
         className="text-alamel-darkGray hover:text-alamel-blue"
       >
         <ArrowLeft className="w-4 h-4 mr-2" />
-        Back to Courses
+        {selectedMaterial ? 'Back to Materials' : 'Back to Courses'}
       </Button>
 
       {!selectedMaterial ? (

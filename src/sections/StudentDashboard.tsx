@@ -53,7 +53,7 @@ import { QuizInterface } from './QuizInterface';
 import { cn } from '@/lib/utils';
 import type { Student } from '../App';
 
-const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`;
+const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001`;
 
 interface StudentDashboardProps {
   user: Student;
@@ -529,7 +529,16 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
             )}
 
             {viewMode === 'materials' && selectedCourse && (
-              <CourseMaterials course={selectedCourse} selectedMaterial={selectedMaterial} onMaterialSelect={handleMaterialSelect} onBack={() => setViewMode('courses')} user={user} results={studentResults} assessments={assessments} />
+              <CourseMaterials
+                course={selectedCourse}
+                selectedMaterial={selectedMaterial}
+                onMaterialSelect={handleMaterialSelect}
+                onBack={() => setViewMode('courses')}
+                onBackToGrid={() => setSelectedMaterial(null)}
+                user={user}
+                results={studentResults}
+                assessments={assessments}
+              />
             )}
 
             {viewMode === 'assessment-list' && selectedCourse && (
