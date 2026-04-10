@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -58,7 +59,10 @@ import {
   Activity as ActivityIcon,
   Key,
   Filter,
-  X
+  X,
+  Bell,
+  Send,
+  RotateCcw
 } from 'lucide-react';
 
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -80,7 +84,7 @@ interface Course {
 }
 
 interface AssessmentConfig {
-  id:string;
+  id: string;
   course_id: string;
   type: 'quiz' | 'examination' | 'assignment';
   title: string;
@@ -105,7 +109,7 @@ interface UploadedMaterial {
 
 export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdminDashboardProps) {
   const isMobile = useIsMobile();
-  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`;
+  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001`;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Core Data State
@@ -119,12 +123,35 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const [isLoading, setIsLoading] = useState(true);
   const [isDeploying, setIsDeploying] = useState(false);
 
+  const { tab } = useParams();
+  const navigate = useNavigate();
+
   // UI State
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState('students');
+  const [activeTab, setActiveTab] = useState(tab || 'students');
+
+  useEffect(() => {
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+    } else if (!tab) {
+      navigate('/admin/students', { replace: true });
+    }
+  }, [tab, activeTab, navigate]);
+
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    navigate(`/admin/${newTab}`);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  
+
+  // Announcements UI State
+  const [announcementText, setAnnouncementText] = useState('');
+  const [announcementScope, setAnnouncementScope] = useState<'all' | 'selected'>('all');
+  const [announcementStudents, setAnnouncementStudents] = useState<string[]>([]);
+  const [announcementType] = useState('general');
+  const [announcementSending, setAnnouncementSending] = useState(false);
+
   // Dialogs
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -134,11 +161,12 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentId, setNewStudentId] = useState('');
   const [newStudentPassword, setNewStudentPassword] = useState('');
-  const [generatedCredentials, setGeneratedCredentials] = useState<{id: string, password: string} | null>(null);
+  const [generatedCredentials, setGeneratedCredentials] = useState<{ id: string, password: string } | null>(null);
 
   // Assessment Form
   const [selectedCourse, setSelectedCourse] = useState('');
   const [assessmentTitle, setAssessmentTitle] = useState('');
+  const [assessmentType, setAssessmentType] = useState<'quiz' | 'examination' | 'assignment'>('examination');
   const [duration, setDuration] = useState(30);
   const [endDate, setEndDate] = useState('');
   const [assignedStudents, setAssignedStudents] = useState<string[]>([]);
@@ -150,13 +178,13 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const [globalAssessmentMode, setGlobalAssessmentMode] = useState<'objective' | 'written' | 'integrated'>('objective');
 
   const addQuestion = () => {
-    setNewAssessmentQuestions([...newAssessmentQuestions, { 
-      id: Date.now().toString(), 
-      type: globalAssessmentMode, 
-      text: '', 
+    setNewAssessmentQuestions([...newAssessmentQuestions, {
+      id: Date.now().toString(),
+      type: globalAssessmentMode,
+      text: '',
       objectiveText: '',
       modelAnswer: '',
-      options: ['', '', '', ''], 
+      options: ['', '', '', ''],
       correctAnswer: 0,
       activeTab: 'objective'
     }]);
@@ -243,6 +271,35 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const studentOptions: Option[] = myStudents.map(s => ({ label: s.name, value: s.id }));
 
   // Action Handlers
+  const handleSendAnnouncement = async () => {
+    if (!announcementText.trim()) return toast.error('Announcement message cannot be empty');
+    if (announcementScope === 'selected' && announcementStudents.length === 0) return toast.error('Select at least one student');
+    setAnnouncementSending(true);
+    try {
+      const res = await fetch(`${API_URL}/api/announcements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_ids: announcementScope === 'selected' ? announcementStudents : [],
+          target_type: announcementScope,
+          message: announcementText,
+          type: announcementType
+        })
+      });
+      if (res.ok) {
+        toast.success('Announcement broadcasted successfully');
+        setAnnouncementText('');
+        setAnnouncementStudents([]);
+      } else {
+        toast.error('Failed to send announcement');
+      }
+    } catch (e: any) {
+      toast.error('Network error sending announcement');
+    } finally {
+      setAnnouncementSending(false);
+    }
+  };
+
   const handleAddStudent = async () => {
     if (!newStudentName) {
       toast.error('Student Name is required');
@@ -286,7 +343,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
     if (!endDate) { toast.error('Please set a deadline for the assessment'); return; }
     if (newAssessmentQuestions.length === 0) { toast.error('Please add at least one question to the assessment'); return; }
     setIsDeploying(true);
-    const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: 'quiz', title: assessmentTitle, mode: 'objectives', submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
+    const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: assessmentType, title: assessmentTitle, mode: 'objectives', submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
     try {
       const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
       if (res.ok) { fetchData(); toast.success(`Assessment "${assessmentTitle}" published`); setNewAssessmentQuestions([]); setAssessmentTitle(''); setSelectedCourse(''); setEndDate(''); setAssignedStudents([]); }
@@ -377,34 +434,35 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
               { icon: FolderLock, label: 'SCM', value: 'scm-management' },
               { icon: Clock, label: 'Assessment', value: 'timer' },
               { icon: CheckCircle, label: 'Results', value: 'results' },
+              { icon: Bell, label: 'Announcements', value: 'announcements' },
               { icon: ActivityIcon, label: 'Activity', value: 'activity' },
               { icon: Key, label: 'Generator', value: 'generator' }
             ]
-            .filter(item => { if (user.status === 'suspended') return item.value === 'students'; return true; })
-            .map(item => (
-              <button 
-                key={item.value} 
-                onClick={() => { setActiveTab(item.value); if(isMobile) setMobileMenuOpen(false); }} 
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all relative group ${activeTab === item.value ? 'bg-neon-cyan/10 text-neon-cyan shadow-[inset_0_0_15px_rgba(0,242,255,0.1)] border border-neon-cyan/30' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}
-              >
-                {activeTab === item.value && <div className="absolute left-0 w-1 h-6 bg-neon-cyan rounded-r-full shadow-[0_0_10px_#00f2ff]" />}
-                <div className="relative">
-                  <item.icon className={`w-5 h-5 flex-shrink-0 transition-colors ${activeTab === item.value ? 'text-neon-cyan' : 'group-hover:text-neon-cyan/70'}`} />
-                  {item.badge !== undefined && item.badge > 0 && (
-                    <span className="absolute -top-2 -right-2 bg-neon-pink text-white text-[8px] font-bold w-4 h-4 flex items-center justify-center rounded-full animate-pulse shadow-[0_0_10px_#ff00e5]">
-                      {item.badge}
-                    </span>
-                  )}
-                </div>
-                {!sidebarCollapsed && <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>}
-              </button>
-            ))}
+              .filter(item => { if (user.status === 'suspended') return item.value === 'students'; return true; })
+              .map(item => (
+                <button
+                  key={item.value}
+                  onClick={() => { handleTabChange(item.value); if (isMobile) setMobileMenuOpen(false); }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all relative group ${activeTab === item.value ? 'bg-neon-cyan/10 text-neon-cyan shadow-[inset_0_0_15px_rgba(0,242,255,0.1)] border border-neon-cyan/30' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}
+                >
+                  {activeTab === item.value && <div className="absolute left-0 w-1 h-6 bg-neon-cyan rounded-r-full shadow-[0_0_10px_#00f2ff]" />}
+                  <div className="relative">
+                    <item.icon className={`w-5 h-5 flex-shrink-0 transition-colors ${activeTab === item.value ? 'text-neon-cyan' : 'group-hover:text-neon-cyan/70'}`} />
+                    {item.badge !== undefined && item.badge > 0 && (
+                      <span className="absolute -top-2 -right-2 bg-neon-pink text-white text-[8px] font-bold w-4 h-4 flex items-center justify-center rounded-full animate-pulse shadow-[0_0_10px_#ff00e5]">
+                        {item.badge}
+                      </span>
+                    )}
+                  </div>
+                  {!sidebarCollapsed && <span className="text-[10px] font-black uppercase tracking-widest">{item.label}</span>}
+                </button>
+              ))}
           </nav>
         </ScrollArea>
         {!isMobile && <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="absolute -right-3 top-24 w-6 h-6 bg-[#121212] text-neon-cyan rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform border border-neon-border/50"><ChevronRight className={cn("w-4 h-4 transition-transform", !sidebarCollapsed && "rotate-180")} /></button>}
         <div className="p-4 border-t border-neon-border/30 bg-black/20">
           <button onClick={onLogout} className="w-full flex items-center gap-3 p-3 rounded-xl text-neon-pink/70 hover:bg-neon-pink/10 hover:text-neon-pink transition-all group border border-transparent hover:border-neon-pink/30">
-            <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /> 
+            <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
             {!sidebarCollapsed && <span className="text-[10px] font-black uppercase tracking-widest">Logout</span>}
           </button>
         </div>
@@ -467,7 +525,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                   </TableHeader>
                   <TableBody>
                     {filteredStudents.map(s => (
-                      <TableRow key={s.id} className="hover:bg-neon-cyan/5 cursor-pointer border-neon-border/30 transition-colors group" onClick={() => { setSelectedStudent(s); setActiveTab('student-workspace'); }}>
+                      <TableRow key={s.id} className="hover:bg-neon-cyan/5 cursor-pointer border-neon-border/30 transition-colors group" onClick={() => { setSelectedStudent(s); handleTabChange('student-workspace'); }}>
                         <TableCell className="px-10 py-8">
                           <div className="flex items-center gap-5">
                             <div className="w-14 h-14 rounded-2xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center text-neon-cyan font-black text-lg shadow-inner">
@@ -495,7 +553,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
 
           {activeTab === 'student-workspace' && selectedStudent && (
             <div className="space-y-8 animate-fade-in">
-              <button onClick={() => setActiveTab('students')} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neon-cyan hover:opacity-70 transition-all"><ChevronLeft className="w-4 h-4" /> BACK TO RECORDS</button>
+              <button onClick={() => handleTabChange('students')} className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-neon-cyan hover:opacity-70 transition-all"><ChevronLeft className="w-4 h-4" /> BACK TO RECORDS</button>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <Card className="rounded-[32px] p-8 border border-neon-border bg-neon-cyan/5 text-white relative overflow-hidden h-full shadow-[inset_0_0_30px_rgba(0,242,255,0.05)]">
                   <div className="absolute -right-10 -bottom-10 w-48 h-48 opacity-5 rotate-12 bg-neon-cyan rounded-full blur-3xl" />
@@ -565,7 +623,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                           <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center text-lg font-black italic shadow-inner border border-white/10">{c.code[0]}</div>
                           <p className="uppercase tracking-widest text-sm font-black italic">{c.name}</p>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/enrollments/${selectedStudent.id}/${c.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-white/50 hover:text-white opacity-0 group-hover:opacity-100 transition-all hover:scale-110"><Trash2 className="w-5 h-5" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/enrollments/${selectedStudent.id}/${c.id}`, { method: 'DELETE' }).then(() => fetchData())} className="text-white/50 hover:text-white opacity-0 group-hover:opacity-100 transition-all hover:scale-110"><Trash2 className="w-5 h-5" /></Button>
                       </div>
                     ))}
                     {courses.filter(c => selectedStudent.courses?.includes(c.id)).length === 0 && <div className="lg:col-span-3 h-32 rounded-[32px] border-2 border-dashed border-neon-border/50 flex items-center justify-center text-gray-700 uppercase text-[10px] font-black tracking-widest italic bg-black/20">Vault Empty</div>}
@@ -622,6 +680,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                   <CardHeader className="p-0 mb-8"><CardTitle className="text-lg uppercase font-black italic text-white tracking-tighter">Assessment Config</CardTitle><CardDescription className="text-[10px] uppercase text-gray-500 font-black tracking-widest">Define module parameters</CardDescription></CardHeader>
                   <div className="space-y-6">
                     <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Course Target</Label><Select value={selectedCourse} onValueChange={setSelectedCourse}><SelectTrigger className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold"><SelectValue placeholder="Select Module" /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border">{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-bold text-gray-300 hover:text-neon-cyan">{c.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Mode of Assessment</Label><Select value={assessmentType} onValueChange={(v: any) => setAssessmentType(v)}><SelectTrigger className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold"><SelectValue placeholder="Select Mode" /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border"><SelectItem value="examination" className="font-bold text-gray-300 hover:text-neon-cyan">Examination</SelectItem><SelectItem value="assignment" className="font-bold text-gray-300 hover:text-neon-cyan">Assignment</SelectItem><SelectItem value="quiz" className="font-bold text-gray-300 hover:text-neon-cyan">Quiz</SelectItem></SelectContent></Select></div>
                     <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Assessment Title</Label><Input value={assessmentTitle} onChange={e => setAssessmentTitle(e.target.value)} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div>
                     <div className="grid grid-cols-1 gap-6"><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Deadline</Label><Input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Duration (Min)</Label><Input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div></div>
                     <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Assign To</Label><MultiSelect options={studentOptions} selected={assignedStudents} onChange={setAssignedStudents} placeholder="Select identities..." /></div>
@@ -692,7 +751,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                           <p className="text-lg font-black tracking-tight text-white line-clamp-1 mb-2 italic uppercase">{a.title}</p>
                           <div className="flex items-center gap-6"><div className="flex items-center gap-2 text-gray-500 text-[9px] font-black uppercase tracking-widest"><Clock className="w-3.5 h-3.5 text-neon-cyan/50" /> {a.duration}M</div><div className="flex items-center gap-2 text-gray-500 text-[9px] font-black uppercase tracking-widest"><Users className="w-3.5 h-3.5 text-neon-cyan/50" /> {a.assigned_student_ids?.length || 0}</div></div>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/assessments/${a.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-gray-700 hover:text-neon-pink hover:bg-neon-pink/10 transition-all ml-4 h-14 w-14 rounded-2xl border border-transparent hover:border-neon-pink/30"><Trash2 className="w-6 h-6" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/assessments/${a.id}`, { method: 'DELETE' }).then(() => fetchData())} className="text-gray-700 hover:text-neon-pink hover:bg-neon-pink/10 transition-all ml-4 h-14 w-14 rounded-2xl border border-transparent hover:border-neon-pink/30"><Trash2 className="w-6 h-6" /></Button>
                       </div>
                     ))}
                     {assessments.length === 0 && <div className="lg:col-span-3 h-48 border-2 border-dashed border-neon-border/30 rounded-[40px] flex items-center justify-center text-gray-800 uppercase text-[10px] font-black tracking-[0.5em] italic bg-black/20">Vault Empty</div>}
@@ -711,13 +770,51 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {uploadedMaterials.filter(m => m.uploaded_by === user.name || m.uploaded_by === user.id).map(m => (
                   <Card key={m.id} className="rounded-[32px] border border-neon-border/50 shadow-xl p-8 group relative overflow-hidden bg-black/40 backdrop-blur-sm hover:border-neon-cyan/30 transition-all">
-                    <div className="flex justify-between items-start mb-6"><div className="w-14 h-14 rounded-2xl bg-neon-cyan/10 border border-neon-cyan/30 text-neon-cyan flex items-center justify-center shadow-[inset_0_0_15px_rgba(0,242,255,0.1)]"><Files className="w-7 h-7" /></div><Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/materials/${m.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:text-neon-pink h-9 w-9"><Trash2 className="w-4 h-4" /></Button></div>
+                    <div className="flex justify-between items-start mb-6"><div className="w-14 h-14 rounded-2xl bg-neon-cyan/10 border border-neon-cyan/30 text-neon-cyan flex items-center justify-center shadow-[inset_0_0_15px_rgba(0,242,255,0.1)]"><Files className="w-7 h-7" /></div><Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/materials/${m.id}`, { method: 'DELETE' }).then(() => fetchData())} className="text-red-400 opacity-0 group-hover:opacity-100 transition-all hover:text-neon-pink h-9 w-9"><Trash2 className="w-4 h-4" /></Button></div>
                     <h4 className="text-white text-base mb-1 line-clamp-1 font-black uppercase italic tracking-tight">{m.title}</h4><p className="text-[9px] text-gray-500 uppercase mb-6 tracking-[0.2em] font-black">{m.type}</p>
                     <div className="flex gap-4"><Button variant="outline" className="flex-1 rounded-2xl h-12 text-[10px] font-black tracking-widest border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan hover:border-neon-cyan/50 transition-all uppercase italic" onClick={() => handleView(m)}><Eye className="w-4 h-4 mr-2" /> REVIEW</Button><Button variant="outline" size="icon" className="rounded-2xl h-12 w-12 border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan shadow-lg" onClick={() => handleDownload(m)}><Download className="w-4 h-4" /></Button></div>
                   </Card>
                 ))}
               </div>
             </Card>
+          )}
+
+          {activeTab === 'announcements' && (
+            <div className="max-w-4xl mx-auto space-y-8 animate-fade-in py-10">
+              <div className="flex flex-col items-center mb-8">
+                <div className="w-20 h-20 bg-neon-cyan/10 text-neon-cyan rounded-3xl flex items-center justify-center mb-6 shadow-lg border border-neon-cyan/20"><Bell className="w-10 h-10" /></div>
+                <h2 className="text-3xl uppercase tracking-tighter text-white font-black italic">Broadcast Center</h2>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-2 font-black">Dispatch systemic announcements</p>
+              </div>
+
+              <Card className="rounded-[40px] border border-neon-border shadow-2xl p-10 bg-neon-card/50 backdrop-blur-md">
+                <div className="space-y-8">
+                  <div className="space-y-3">
+                    <Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Audience Scope</Label>
+                    <div className="flex bg-black/40 rounded-2xl p-1 border border-neon-border/50">
+                      <button onClick={() => setAnnouncementScope('all')} className={cn("flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", announcementScope === 'all' ? "bg-neon-cyan text-black shadow-[0_0_15px_rgba(0,242,255,0.4)]" : "text-gray-500 hover:text-gray-300")}>All Authorized Students</button>
+                      <button onClick={() => setAnnouncementScope('selected')} className={cn("flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", announcementScope === 'selected' ? "bg-neon-cyan text-black shadow-[0_0_15px_rgba(0,242,255,0.4)]" : "text-gray-500 hover:text-gray-300")}>Selected Identities</button>
+                    </div>
+                  </div>
+
+                  {announcementScope === 'selected' && (
+                    <div className="space-y-3 animate-fade-in">
+                      <Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Select Identities Target</Label>
+                      <MultiSelect options={studentOptions} selected={announcementStudents} onChange={setAnnouncementStudents} placeholder="Select target students..." />
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Message Detail</Label>
+                    <Textarea value={announcementText} onChange={(e) => setAnnouncementText(e.target.value)} className="min-h-[200px] rounded-[24px] border-neon-border bg-black/40 text-sm p-6 font-bold text-gray-200 resize-none placeholder:text-gray-700 focus:border-neon-cyan shadow-inner" placeholder="Enter broadcast transmission..." />
+                  </div>
+
+                  <Button onClick={handleSendAnnouncement} disabled={announcementSending} className="w-full h-16 bg-neon-cyan text-black rounded-[24px] shadow-xl transition-all text-xs font-black uppercase tracking-[0.2em] italic hover:scale-[1.02] mt-4 flex justify-center items-center gap-3">
+                    {announcementSending ? <RotateCcw className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {announcementSending ? 'TRANSMITTING...' : 'DISPATCH BROADCAST'}
+                  </Button>
+                </div>
+              </Card>
+            </div>
           )}
 
           {activeTab === 'generator' && (
@@ -747,7 +844,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
             <Card className="rounded-[32px] border border-neon-border shadow-2xl p-10 bg-neon-card/50 backdrop-blur-md overflow-hidden">
               <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6">
                 <div><h2 className="text-2xl uppercase tracking-tighter text-white font-black italic">Academic Intelligence</h2><p className="text-[10px] text-gray-500 uppercase tracking-[0.3em] font-black mt-2">Historical Records Console</p></div>
-                <Button variant="outline" className="rounded-2xl border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan hover:border-neon-cyan transition-all uppercase text-[10px] font-black h-12 px-8 tracking-widest italic shadow-lg"><Filter className="w-4 h-4 mr-3 text-neon-cyan/50" /> FILTER ENGINE</Button>
+                <Button onClick={() => toast.info('Advanced filtering coming soon')} variant="outline" className="rounded-2xl border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan hover:border-neon-cyan transition-all uppercase text-[10px] font-black h-12 px-8 tracking-widest italic shadow-lg"><Filter className="w-4 h-4 mr-3 text-neon-cyan/50" /> FILTER ENGINE</Button>
               </div>
               <Table>
                 <TableHeader className="bg-black/40 border-b border-neon-border/50"><TableRow className="hover:bg-transparent"><TableHead className="px-8 py-6 text-neon-cyan uppercase text-[10px] font-black tracking-widest">Student Identity</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black tracking-widest">Assessment</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black tracking-widest">Outcome</TableHead><TableHead className="text-right px-8 text-neon-cyan uppercase text-[10px] font-black tracking-widest">Status</TableHead></TableRow></TableHeader>
@@ -800,7 +897,7 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
               <Label className="text-[10px] text-gray-500 uppercase tracking-widest ml-1 font-black">Identity Token</Label>
               <div className="flex gap-3">
                 <Input value={newStudentId} onChange={e => setNewStudentId(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-lg px-5 text-neon-cyan font-black flex-1 tracking-widest shadow-inner" />
-                <Button variant="outline" onClick={() => setNewStudentId('STU'+Math.floor(1000+Math.random()*9000))} className="h-14 w-14 rounded-2xl border-neon-border bg-black/40 hover:bg-neon-cyan/10 transition-all flex-shrink-0"><RefreshCw className="w-5 h-5 text-neon-cyan" /></Button>
+                <Button variant="outline" onClick={() => setNewStudentId('STU' + Math.floor(1000 + Math.random() * 9000))} className="h-14 w-14 rounded-2xl border-neon-border bg-black/40 hover:bg-neon-cyan/10 transition-all flex-shrink-0"><RefreshCw className="w-5 h-5 text-neon-cyan" /></Button>
               </div>
             </div>
             <div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase tracking-widest ml-1 font-black">Secret Access Key</Label><Input value={newStudentPassword} onChange={e => setNewStudentPassword(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5 focus:border-neon-cyan transition-all shadow-inner" placeholder="••••••••" /></div>

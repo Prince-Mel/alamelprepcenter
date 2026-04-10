@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -68,7 +69,13 @@ import {
   Activity as ActivityIcon,
   Key,
   Filter,
-  X
+  X,
+  FileText,
+  Check,
+  AlertCircle,
+  RotateCcw,
+  Bell,
+  Send
 } from 'lucide-react';
 
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -90,7 +97,7 @@ interface Course {
 }
 
 interface AssessmentConfig {
-  id:string;
+  id: string;
   course_id: string;
   type: 'quiz' | 'examination' | 'assignment';
   title: string;
@@ -99,6 +106,7 @@ interface AssessmentConfig {
   duration: number;
   end_date: string;
   assigned_student_ids: string[];
+  structured_questions: any[];
 }
 
 interface UploadedMaterial {
@@ -130,14 +138,37 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   const [isLoading, setIsLoading] = useState(true);
   const [isDeploying, setIsDeploying] = useState(false);
 
+  const { tab } = useParams();
+  const navigate = useNavigate();
+
   // UI State
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [activeTab, setActiveTab] = useState('students');
+  const [activeTab, setActiveTab] = useState(tab || 'students');
+
+  useEffect(() => {
+    if (tab && tab !== activeTab) {
+      setActiveTab(tab);
+    } else if (!tab) {
+      navigate('/admin/students', { replace: true });
+    }
+  }, [tab, activeTab, navigate]);
+
+  const handleTabChange = (newTab: string) => {
+    setActiveTab(newTab);
+    navigate(`/admin/${newTab}`);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [viewScope, setViewScope] = useState<'all' | 'direct'>('all');
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [originalId, setOriginalId] = useState('');
-  
+
+  // Announcements UI State
+  const [announcementText, setAnnouncementText] = useState('');
+  const [announcementScope, setAnnouncementScope] = useState<'all' | 'selected'>('all');
+  const [announcementStudents, setAnnouncementStudents] = useState<string[]>([]);
+  const [announcementType] = useState('general');
+  const [announcementSending, setAnnouncementSending] = useState(false);
+
   // Dialogs
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -152,7 +183,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentId, setNewStudentId] = useState('');
   const [newStudentPassword, setNewStudentPassword] = useState('');
-  const [generatedCredentials, setGeneratedCredentials] = useState<{id: string, password: string} | null>(null);
+  const [generatedCredentials, setGeneratedCredentials] = useState<{ id: string, password: string } | null>(null);
 
   const [newSubAdminName, setNewSubAdminName] = useState('');
   const [newSubAdminId, setNewSubAdminId] = useState('');
@@ -165,6 +196,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   // Assessment Form
   const [selectedCourse, setSelectedCourse] = useState('');
   const [assessmentTitle, setAssessmentTitle] = useState('');
+  const [assessmentType, setAssessmentType] = useState<'quiz' | 'examination' | 'assignment'>('examination');
   const [duration, setDuration] = useState(30);
   const [endDate, setEndDate] = useState('');
   const [assignedStudents, setAssignedStudents] = useState<string[]>([]);
@@ -178,8 +210,9 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   // Marking Form
   const [selectedResult, setSelectedResult] = useState<any>(null);
   const [markingScore, setMarkingScore] = useState(0);
-  const [markingStatus, setMarkingScoreStatus] = useState<'pending'|'released'>('pending');
-  const [markingShowScore, setMarkingShowScore] = useState(true);
+  const [markingStatus, setMarkingScoreStatus] = useState<'pending' | 'released'>('pending');
+  const [markingManualMarking, setMarkingManualMarking] = useState<Record<string, any>>({});
+  const [markingFeedback, setMarkingFeedback] = useState('');
 
   // Course Form
   const [selectedCourseToEdit, setSelectedCourseToEdit] = useState<Course | null>(null);
@@ -247,6 +280,27 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
     if (res.ok) { fetchData(); setShowDeleteDialog(false); setActiveTab('students'); toast.success('Deleted'); }
   };
 
+  const calculateScoreFromMarking = () => {
+    const asmt = assessments.find(a => a.id === selectedResult?.assessment_id);
+    const total = asmt?.structured_questions?.length || 1;
+    const correctCount = Object.values(markingManualMarking).filter(v => v === 'correct').length;
+    const partialCount = Object.values(markingManualMarking).filter(v => v === 'partial').length;
+    const newScore = Math.round(((correctCount + (partialCount * 0.5)) / total) * 100);
+    setMarkingScore(newScore);
+    toast.info(`Score calculated: ${newScore}%`);
+  };
+
+  // Auto-update score whenever manual marking changes
+  useEffect(() => {
+    if (!selectedResult || Object.keys(markingManualMarking).length === 0) return;
+    const asmt = assessments.find(a => a.id === selectedResult?.assessment_id);
+    const total = asmt?.structured_questions?.length || 1;
+    const correctCount = Object.values(markingManualMarking).filter(v => v === 'correct').length;
+    const partialCount = Object.values(markingManualMarking).filter(v => v === 'partial').length;
+    const newScore = Math.round(((correctCount + (partialCount * 0.5)) / total) * 100);
+    setMarkingScore(newScore);
+  }, [markingManualMarking, selectedResult, assessments]);
+
   const handleAddSubAdmin = async () => {
     const sub = { id: newSubAdminId.toUpperCase(), name: newSubAdminName, password: newSubAdminPassword, role: 'subadmin', status: 'active', email: newSubAdminEmail, contact: newSubAdminContact };
     const res = await fetch(`${API_URL}/api/subadmins`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(sub) });
@@ -300,12 +354,30 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
   };
 
   const handleCreateAssessment = async () => {
-    if (!selectedCourse || !assessmentTitle || !endDate) return;
+    if (!selectedCourse || !assessmentTitle || !endDate) {
+      toast.error('Module, Title, and Deadline are required');
+      return;
+    }
+    if (newAssessmentQuestions.length === 0) {
+      toast.error('Please add at least one question to the assessment');
+      return;
+    }
     setIsDeploying(true);
-    const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: 'quiz', title: assessmentTitle, mode: globalAssessmentMode, submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
-    const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
-    if (res.ok) { fetchData(); toast.success('Published'); setAssessmentTitle(''); setNewAssessmentQuestions([]); }
-    setIsDeploying(false);
+    try {
+      const modeToSend = globalAssessmentMode === 'objective' ? 'objectives' : globalAssessmentMode;
+      const config = { id: `ASMT${Date.now()}`, course_id: selectedCourse, type: assessmentType, title: assessmentTitle, mode: modeToSend, submission_mode: 'online', structured_questions: newAssessmentQuestions, duration, start_date: new Date().toISOString(), end_date: new Date(endDate).toISOString(), assigned_student_ids: assignedStudents };
+      const res = await fetch(`${API_URL}/api/assessments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(config) });
+      if (res.ok) { fetchData(); toast.success('Published'); setAssessmentTitle(''); setNewAssessmentQuestions([]); }
+      else {
+        let errMsg = 'Failed to publish assessment';
+        try { const errorData = await res.json(); if (errorData.message) errMsg = errorData.message; } catch (e) { }
+        toast.error(`Deploy failed: ${errMsg}`);
+      }
+    } catch (error: any) {
+      toast.error(`Error: ${error.message || 'Network error while deploying assessment'}`);
+    } finally {
+      setIsDeploying(false);
+    }
   };
 
   const handleUpdateResult = async () => {
@@ -314,24 +386,59 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
       return;
     }
     try {
-      console.log('Updating result:', selectedResult.id, { score: markingScore, status: markingStatus, show_score: markingShowScore });
-      const res = await fetch(`${API_URL}/api/results/${selectedResult.id}`, { 
-        method: 'PUT', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ score: markingScore, status: markingStatus, show_score: markingShowScore }) 
+      console.log('Updating result:', selectedResult.id, { score: markingScore, status: markingStatus, show_score: markingStatus === 'released' });
+      const res = await fetch(`${API_URL}/api/results/${selectedResult.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          score: markingScore,
+          status: markingStatus,
+          show_score: markingStatus === 'released',
+          manual_marking: markingManualMarking,
+          feedback: markingFeedback
+        })
       });
-      if (res.ok) { 
-        fetchData(); 
-        setShowMarkDialog(false); 
-        toast.success('Result Updated Successfully'); 
+      if (res.ok) {
+        fetchData();
+        setShowMarkDialog(false);
+        toast.success('Result Updated Successfully');
       } else {
         const errorData = await res.json();
         console.error('Server error:', errorData);
         toast.error(`Update failed: ${errorData.message || res.statusText}`);
       }
-    } catch (e: any) { 
+    } catch (e: any) {
       console.error('Network or logic error:', e);
-      toast.error(`Error: ${e.message || 'Unknown error'}`); 
+      toast.error(`Error: ${e.message || 'Unknown error'}`);
+    }
+  };
+
+  const handleSendAnnouncement = async () => {
+    if (!announcementText.trim()) return toast.error('Announcement message cannot be empty');
+    if (announcementScope === 'selected' && announcementStudents.length === 0) return toast.error('Select at least one student');
+    setAnnouncementSending(true);
+    try {
+      const res = await fetch(`${API_URL}/api/announcements`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          student_ids: announcementScope === 'selected' ? announcementStudents : [],
+          target_type: announcementScope,
+          message: announcementText,
+          type: announcementType
+        })
+      });
+      if (res.ok) {
+        toast.success('Announcement broadcasted successfully');
+        setAnnouncementText('');
+        setAnnouncementStudents([]);
+      } else {
+        toast.error('Failed to send announcement');
+      }
+    } catch (e: any) {
+      toast.error('Network error sending announcement');
+    } finally {
+      setAnnouncementSending(false);
     }
   };
 
@@ -404,12 +511,13 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
               { icon: Clock, label: 'Assessment', value: 'timer' },
               { icon: BookUser, label: 'Enrollment', value: 'course-assignment' },
               { icon: CheckCircle, label: 'Results', value: 'results' },
+              { icon: Bell, label: 'Announcements', value: 'announcements' },
               { icon: ActivityIcon, label: 'Activity', value: 'activity' },
               { icon: Key, label: 'Generator', value: 'generator' }
             ].map(item => (
-              <button 
-                key={item.value} 
-                onClick={() => { setActiveTab(item.value); if(isMobile) setMobileMenuOpen(false); }} 
+              <button
+                key={item.value}
+                onClick={() => { handleTabChange(item.value); if (isMobile) setMobileMenuOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all relative group ${activeTab === item.value ? 'bg-neon-cyan/10 text-neon-cyan shadow-[inset_0_0_15px_rgba(0,242,255,0.1)] border border-neon-cyan/30' : 'text-gray-500 hover:bg-white/5 hover:text-gray-300'}`}
               >
                 {activeTab === item.value && <div className="absolute left-0 w-1 h-6 bg-neon-cyan rounded-r-full shadow-[0_0_10px_#00f2ff]" />}
@@ -429,7 +537,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
         {!isMobile && <button onClick={() => setSidebarCollapsed(!sidebarCollapsed)} className="absolute -right-3 top-24 w-6 h-6 bg-[#121212] text-neon-cyan rounded-full shadow-lg flex items-center justify-center hover:scale-110 transition-transform border border-neon-border/50"><ChevronRight className={cn("w-4 h-4 transition-transform", !sidebarCollapsed && "rotate-180")} /></button>}
         <div className="p-4 border-t border-neon-border/30 bg-black/20">
           <button onClick={onLogout} className="w-full flex items-center gap-3 p-3 rounded-xl text-neon-pink/70 hover:bg-neon-pink/10 hover:text-neon-pink transition-all group border border-transparent hover:border-neon-pink/30">
-            <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /> 
+            <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
             {!sidebarCollapsed && <span className="text-[10px] font-black uppercase tracking-widest">Logout</span>}
           </button>
         </div>
@@ -482,7 +590,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                   <TableHeader className="bg-black/40"><TableRow className="hover:bg-transparent border-neon-border/50"><TableHead className="px-8 py-6 uppercase text-[10px] font-black tracking-widest text-neon-cyan">Identity</TableHead><TableHead className="uppercase text-[10px] text-center font-black tracking-widest text-neon-cyan">Status</TableHead><TableHead className="text-right px-8 uppercase text-[10px] font-black tracking-widest text-neon-cyan">Action</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {filteredStudents.map(s => (
-                      <TableRow key={s.id} className="hover:bg-neon-cyan/5 cursor-pointer border-neon-border/30 transition-colors group" onClick={() => { setSelectedStudent(s); setOriginalId(s.id); setActiveTab('student-workspace'); }}>
+                      <TableRow key={s.id} className="hover:bg-neon-cyan/5 cursor-pointer border-neon-border/30 transition-colors group" onClick={() => { setSelectedStudent(s); setOriginalId(s.id); handleTabChange('student-workspace'); }}>
                         <TableCell className="px-8 py-6 flex items-center gap-4"><div className="w-10 h-10 rounded-lg bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center text-neon-cyan font-black text-xs shadow-inner">{s.id.slice(-2)}</div><div><p className="text-white text-sm font-bold tracking-tight">{s.name}</p><p className="text-[10px] text-gray-500 uppercase font-black tracking-widest group-hover:text-neon-cyan/70 transition-colors">{s.id}</p></div></TableCell>
                         <TableCell className="text-center">{getStatusBadge(s.status)}</TableCell>
                         <TableCell className="text-right px-8"><Button variant="ghost" size="icon" onClick={e => { e.stopPropagation(); setSelectedStudent(s); setShowDeleteDialog(true); }} className="text-neon-pink/50 hover:text-neon-pink hover:bg-neon-pink/10 rounded-xl transition-all"><Trash2 className="w-4 h-4" /></Button></TableCell>
@@ -497,7 +605,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
           {activeTab === 'student-workspace' && selectedStudent && (
             <div className="space-y-8 animate-fade-in">
               <div className="flex items-center justify-between mb-2">
-                <button onClick={() => setActiveTab('students')} className="text-neon-cyan uppercase text-[10px] font-black tracking-widest flex items-center hover:opacity-70 transition-opacity"><ChevronLeft className="w-4 h-4 mr-2" /> Back to Students</button>
+                <button onClick={() => handleTabChange('students')} className="text-neon-cyan uppercase text-[10px] font-black tracking-widest flex items-center hover:opacity-70 transition-opacity"><ChevronLeft className="w-4 h-4 mr-2" /> Back to Students</button>
                 <div className="flex gap-3">
                   <Button onClick={() => setShowEditDialog(true)} className="bg-neon-card text-neon-cyan border border-neon-cyan/30 rounded-2xl h-10 px-6 text-[10px] font-black tracking-widest uppercase hover:bg-neon-cyan/10 transition-all"><Settings className="w-4 h-4 mr-2" /> Edit Profile</Button>
                   <Button onClick={handleDeleteStudent} className="bg-neon-pink/10 text-neon-pink border border-neon-pink/30 rounded-2xl h-10 px-6 text-[10px] font-black tracking-widest uppercase hover:bg-neon-pink/20 transition-all"><Trash2 className="w-4 h-4 mr-2" /> Expel</Button>
@@ -549,7 +657,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                   {courses.filter(c => selectedStudent.courses?.includes(c.id)).map(c => (
                     <div key={c.id} className={cn("p-6 rounded-[24px] transition-all flex justify-between items-center group w-full text-white shadow-xl border border-white/10 hover:border-white/30", c.color)}>
                       <p className="uppercase tracking-widest text-sm font-black italic">{c.name}</p>
-                      <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/enrollments/${selectedStudent.id}/${c.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-white/50 hover:text-white opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-5 h-5" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/enrollments/${selectedStudent.id}/${c.id}`, { method: 'DELETE' }).then(() => fetchData())} className="text-white/50 hover:text-white opacity-0 group-hover:opacity-100 transition-all"><Trash2 className="w-5 h-5" /></Button>
                     </div>
                   ))}
                 </div>
@@ -596,7 +704,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
               <div className="flex flex-col md:flex-row justify-between items-center mb-12 gap-6"><div><CardTitle className="text-2xl uppercase tracking-tighter text-white font-black italic">SCM Repository</CardTitle><p className="text-[10px] text-gray-500 uppercase tracking-[0.3em] font-black mt-2">Central Asset Management</p></div><Button onClick={() => setShowAdminUploadDialog(true)} className="bg-neon-cyan text-black rounded-2xl h-14 px-10 shadow-lg text-[10px] font-black uppercase italic"><Upload className="w-5 h-5 mr-3" /> DEPLOY ASSET</Button></div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {uploadedMaterials.map(m => (
-                  <Card key={m.id} className="rounded-[32px] border border-neon-border/50 shadow-xl p-8 group relative overflow-hidden bg-black/40 backdrop-blur-sm hover:border-neon-cyan/30 transition-all"><div className="flex justify-between items-start mb-6"><div className="w-14 h-14 rounded-2xl bg-neon-cyan/10 border border-neon-cyan/30 text-neon-cyan flex items-center justify-center shadow-inner"><Files className="w-7 h-7" /></div><div className="flex gap-2">{!m.approved && <Button variant="outline" size="sm" className="bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30 hover:bg-neon-cyan hover:text-black text-[9px] font-black h-9 rounded-xl uppercase px-4" onClick={() => handleApprove(m.id)}>AUTHORIZE</Button>}<Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/materials/${m.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-neon-pink h-9 w-9"><Trash2 className="w-4 h-4" /></Button></div></div><h4 className="text-white text-base mb-1 line-clamp-1 font-black uppercase italic">{m.title}</h4><p className="text-[9px] text-gray-500 uppercase mb-4 font-black">{m.type} • {courses.find(c => c.id === m.course_id)?.name || 'Global'}</p><div className="flex items-center justify-between mb-6 pb-6 border-b border-neon-border/30"><p className="text-[8px] text-gray-600 font-black italic">By {m.uploaded_by}</p><Badge className={cn("text-[8px] font-black uppercase px-3 py-1 rounded-full border shadow-sm", m.approved ? "bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30" : "bg-neon-yellow/10 text-neon-yellow border-neon-yellow/30")}>{m.approved ? 'Live' : 'Pending'}</Badge></div><div className="flex gap-4"><Button variant="outline" className="flex-1 rounded-2xl h-12 text-[10px] font-black border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan hover:border-neon-cyan/50 italic" onClick={() => handleView(m)}><Eye className="w-4 h-4 mr-2" /> REVIEW</Button><Button variant="outline" size="icon" className="rounded-2xl h-12 w-12 border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan shadow-lg" onClick={() => handleDownload(m)}><Download className="w-4 h-4" /></Button></div></Card>
+                  <Card key={m.id} className="rounded-[32px] border border-neon-border/50 shadow-xl p-8 group relative overflow-hidden bg-black/40 backdrop-blur-sm hover:border-neon-cyan/30 transition-all"><div className="flex justify-between items-start mb-6"><div className="w-14 h-14 rounded-2xl bg-neon-cyan/10 border border-neon-cyan/30 text-neon-cyan flex items-center justify-center shadow-inner"><Files className="w-7 h-7" /></div><div className="flex gap-2">{!m.approved && <Button variant="outline" size="sm" className="bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30 hover:bg-neon-cyan hover:text-black text-[9px] font-black h-9 rounded-xl uppercase px-4" onClick={() => handleApprove(m.id)}>AUTHORIZE</Button>}<Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/materials/${m.id}`, { method: 'DELETE' }).then(() => fetchData())} className="text-red-400 opacity-0 group-hover:opacity-100 hover:text-neon-pink h-9 w-9"><Trash2 className="w-4 h-4" /></Button></div></div><h4 className="text-white text-base mb-1 line-clamp-1 font-black uppercase italic">{m.title}</h4><p className="text-[9px] text-gray-500 uppercase mb-4 font-black">{m.type} • {courses.find(c => c.id === m.course_id)?.name || 'Global'}</p><div className="flex items-center justify-between mb-6 pb-6 border-b border-neon-border/30"><p className="text-[8px] text-gray-600 font-black italic">By {m.uploaded_by}</p><Badge className={cn("text-[8px] font-black uppercase px-3 py-1 rounded-full border shadow-sm", m.approved ? "bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30" : "bg-neon-yellow/10 text-neon-yellow border-neon-yellow/30")}>{m.approved ? 'Live' : 'Pending'}</Badge></div><div className="flex gap-4"><Button variant="outline" className="flex-1 rounded-2xl h-12 text-[10px] font-black border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan hover:border-neon-cyan/50 italic" onClick={() => handleView(m)}><Eye className="w-4 h-4 mr-2" /> REVIEW</Button><Button variant="outline" size="icon" className="rounded-2xl h-12 w-12 border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan shadow-lg" onClick={() => handleDownload(m)}><Download className="w-4 h-4" /></Button></div></Card>
                 ))}
               </div>
             </Card>
@@ -609,6 +717,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                   <CardHeader className="p-0 mb-8"><CardTitle className="text-lg uppercase font-black italic text-white tracking-tighter">Assessment Config</CardTitle><CardDescription className="text-[10px] uppercase text-gray-500 font-black tracking-widest">Define test parameters</CardDescription></CardHeader>
                   <div className="space-y-6">
                     <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Module</Label><Select value={selectedCourse} onValueChange={setSelectedCourse}><SelectTrigger className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold"><SelectValue placeholder="Select Module" /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border">{courses.map(c => <SelectItem key={c.id} value={c.id} className="font-bold text-gray-300">{c.name}</SelectItem>)}</SelectContent></Select></div>
+                    <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Mode of Assessment</Label><Select value={assessmentType} onValueChange={(v: any) => setAssessmentType(v)}><SelectTrigger className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold"><SelectValue placeholder="Select Mode" /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border"><SelectItem value="examination" className="font-bold text-gray-300">Examination</SelectItem><SelectItem value="assignment" className="font-bold text-gray-300">Assignment</SelectItem><SelectItem value="quiz" className="font-bold text-gray-300">Quiz</SelectItem></SelectContent></Select></div>
                     <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Title</Label><Input value={assessmentTitle} onChange={e => setAssessmentTitle(e.target.value)} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div>
                     <div className="grid grid-cols-1 gap-6"><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Deadline</Label><Input type="datetime-local" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Duration (Min)</Label><Input type="number" value={duration} onChange={e => setDuration(Number(e.target.value))} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold" /></div></div>
                     <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-gray-400 ml-1">Audience</Label><MultiSelect options={studentOptions} selected={assignedStudents} onChange={setAssignedStudents} placeholder="Select identities..." /></div>
@@ -642,7 +751,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                 </Card>
               </div>
               <Card className="rounded-[40px] p-10 border border-neon-border bg-neon-card/80 text-white overflow-hidden relative shadow-3xl">
-                <div className="relative z-10"><div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12"><div><h3 className="text-2xl font-black italic uppercase tracking-tighter">Active Assessments</h3><p className="text-[10px] text-gray-500 uppercase font-black mt-2">Live Console</p></div><Badge className="bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/30 px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest">{assessments.length} DEPLOYED</Badge></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">{assessments.map(a => (<div key={a.id} className="p-8 rounded-[32px] bg-black/40 backdrop-blur-md border border-neon-border/50 flex justify-between items-center group shadow-2xl transition-all hover:bg-neon-cyan/[0.03] hover:border-neon-cyan/30"><div className="flex-1"><div className="flex items-center gap-3 mb-3"><Badge className="bg-neon-purple/20 text-neon-purple border border-neon-purple/40 text-[9px] uppercase font-black px-3 py-1">{a.type}</Badge><p className="text-[9px] text-neon-cyan/70 font-black uppercase tracking-[0.2em]">{courses.find(c => c.id === a.course_id)?.name}</p></div><p className="text-lg font-black tracking-tight text-white line-clamp-1 mb-2 italic uppercase">{a.title}</p><div className="flex items-center gap-6"><div className="flex items-center gap-2 text-gray-500 text-[9px] font-black uppercase"><Clock className="w-3.5 h-3.5" /> {a.duration}M</div></div></div><Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/assessments/${a.id}`, {method:'DELETE'}).then(() => fetchData())} className="text-gray-700 hover:text-neon-pink hover:bg-neon-pink/10 transition-all ml-4 h-14 w-14 rounded-2xl border border-transparent hover:border-neon-pink/30"><Trash2 className="w-6 h-6" /></Button></div>))}</div></div>
+                <div className="relative z-10"><div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12"><div><h3 className="text-2xl font-black italic uppercase tracking-tighter">Active Assessments</h3><p className="text-[10px] text-gray-500 uppercase font-black mt-2">Live Console</p></div><Badge className="bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/30 px-8 py-3 rounded-full text-[10px] font-black uppercase tracking-widest">{assessments.length} DEPLOYED</Badge></div><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">{assessments.map(a => (<div key={a.id} className="p-8 rounded-[32px] bg-black/40 backdrop-blur-md border border-neon-border/50 flex justify-between items-center group shadow-2xl transition-all hover:bg-neon-cyan/[0.03] hover:border-neon-cyan/30"><div className="flex-1"><div className="flex items-center gap-3 mb-3"><Badge className="bg-neon-purple/20 text-neon-purple border border-neon-purple/40 text-[9px] uppercase font-black px-3 py-1">{a.type}</Badge><p className="text-[9px] text-neon-cyan/70 font-black uppercase tracking-[0.2em]">{courses.find(c => c.id === a.course_id)?.name}</p></div><p className="text-lg font-black tracking-tight text-white line-clamp-1 mb-2 italic uppercase">{a.title}</p><div className="flex items-center gap-6"><div className="flex items-center gap-2 text-gray-500 text-[9px] font-black uppercase"><Clock className="w-3.5 h-3.5" /> {a.duration}M</div></div></div><Button variant="ghost" size="icon" onClick={() => fetch(`${API_URL}/api/assessments/${a.id}`, { method: 'DELETE' }).then(() => fetchData())} className="text-gray-700 hover:text-neon-pink hover:bg-neon-pink/10 transition-all ml-4 h-14 w-14 rounded-2xl border border-transparent hover:border-neon-pink/30"><Trash2 className="w-6 h-6" /></Button></div>))}</div></div>
               </Card>
             </div>
           )}
@@ -659,10 +768,10 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
 
           {activeTab === 'results' && (
             <Card className="rounded-[32px] border border-neon-border shadow-2xl p-10 bg-neon-card/50 backdrop-blur-md overflow-hidden">
-              <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6"><div><h2 className="text-2xl uppercase tracking-tighter text-white font-black italic">Academic Intelligence</h2><p className="text-[10px] text-gray-500 uppercase font-black mt-2">Performance History</p></div><Button variant="outline" className="rounded-2xl border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan transition-all uppercase text-[10px] font-black h-12 px-8 tracking-widest italic shadow-lg"><Filter className="w-4 h-4 mr-3" /> FILTER ENGINE</Button></div>
+              <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6"><div><h2 className="text-2xl uppercase tracking-tighter text-white font-black italic">Academic Intelligence</h2><p className="text-[10px] text-gray-500 uppercase font-black mt-2">Performance History</p></div><Button onClick={() => toast.info('Advanced filtering coming soon')} variant="outline" className="rounded-2xl border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan transition-all uppercase text-[10px] font-black h-12 px-8 tracking-widest italic shadow-lg"><Filter className="w-4 h-4 mr-3" /> FILTER ENGINE</Button></div>
               <Table>
                 <TableHeader className="bg-black/40 border-b border-neon-border/50"><TableRow className="hover:bg-transparent"><TableHead className="px-8 py-6 text-neon-cyan uppercase text-[10px] font-black">Student Profile</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black">Performance</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black">Visibility</TableHead><TableHead className="text-right px-8 text-neon-cyan uppercase text-[10px] font-black">Action</TableHead></TableRow></TableHeader>
-                <TableBody>{results.map(r => (<TableRow key={r.id} className="border-b border-neon-border/20 hover:bg-neon-cyan/5 transition-colors group"><TableCell className="px-8 py-8"><div className="flex items-center gap-5"><Avatar className="w-12 h-12 border border-neon-cyan/30 shadow-lg ring-2 ring-black"><AvatarFallback className="bg-neon-card text-neon-cyan uppercase text-xs font-black italic">{r.student_name?.[0] || 'S'}</AvatarFallback></Avatar><div><p className="text-white text-base tracking-tight font-black italic uppercase leading-tight">{r.student_name}</p><p className="text-[10px] text-gray-500 font-black uppercase mt-1">{r.student_id}</p></div></div></TableCell><TableCell className="text-center"><span className={cn("text-2xl font-black tracking-tighter italic", r.score >= 50 ? 'text-neon-cyan' : 'text-neon-pink')}>{r.score}%</span></TableCell><TableCell className="text-center"><Badge className={cn("px-5 py-2 rounded-full text-[9px] uppercase font-black border italic", r.status === 'released' ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30 shadow-[0_0_10px_rgba(0,242,255,0.1)]' : 'bg-neon-yellow/10 text-neon-yellow border-neon-yellow/30 shadow-[0_0_10px_rgba(255,242,0,0.1)]')}>{r.status}</Badge></TableCell><TableCell className="text-right px-8"><Button onClick={() => { setSelectedResult(r); setMarkingScore(r.score); setMarkingScoreStatus(r.status); setMarkingShowScore(r.show_score ?? true); setShowMarkDialog(true); }} className="bg-neon-cyan text-black hover:shadow-lg px-8 rounded-2xl h-12 shadow-xl uppercase text-[10px] font-black tracking-widest transition-all italic hover:scale-105">REVIEW</Button></TableCell></TableRow>))}</TableBody>
+                <TableBody>{results.map(r => (<TableRow key={r.id} className="border-b border-neon-border/20 hover:bg-neon-cyan/5 transition-colors group"><TableCell className="px-8 py-8"><div className="flex items-center gap-5"><Avatar className="w-12 h-12 border border-neon-cyan/30 shadow-lg ring-2 ring-black"><AvatarFallback className="bg-neon-card text-neon-cyan uppercase text-xs font-black italic">{r.student_name?.[0] || 'S'}</AvatarFallback></Avatar><div><p className="text-white text-base tracking-tight font-black italic uppercase leading-tight">{r.student_name}</p><p className="text-[10px] text-gray-500 font-black uppercase mt-1">{r.student_id}</p></div></div></TableCell><TableCell className="text-center"><span className={cn("text-2xl font-black tracking-tighter italic", r.score >= 50 ? 'text-neon-cyan' : 'text-neon-pink')}>{r.score}%</span></TableCell><TableCell className="text-center"><Badge className={cn("px-5 py-2 rounded-full text-[9px] uppercase font-black border italic", r.status === 'released' ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30 shadow-[0_0_10px_rgba(0,242,255,0.1)]' : 'bg-neon-yellow/10 text-neon-yellow border-neon-yellow/30 shadow-[0_0_10px_rgba(255,242,0,0.1)]')}>{r.status}</Badge></TableCell><TableCell className="text-right px-8"><Button onClick={() => { setSelectedResult(r); setMarkingScore(r.score); setMarkingScoreStatus(r.status === 'released' ? 'released' : 'pending'); setMarkingManualMarking(r.manual_marking || {}); setMarkingFeedback(r.feedback || ''); setShowMarkDialog(true); }} className="bg-neon-cyan text-black hover:shadow-lg px-8 rounded-2xl h-12 shadow-xl uppercase text-[10px] font-black tracking-widest transition-all italic hover:scale-105">REVIEW</Button></TableCell></TableRow>))}</TableBody>
               </Table>
             </Card>
           )}
@@ -683,6 +792,44 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                 ))}
               </div>
             </Card>
+          )}
+
+          {activeTab === 'announcements' && (
+            <div className="max-w-4xl mx-auto space-y-8 animate-fade-in py-10">
+              <div className="flex flex-col items-center mb-8">
+                <div className="w-20 h-20 bg-neon-cyan/10 text-neon-cyan rounded-3xl flex items-center justify-center mb-6 shadow-lg border border-neon-cyan/20"><Bell className="w-10 h-10" /></div>
+                <h2 className="text-3xl uppercase tracking-tighter text-white font-black italic">Broadcast Center</h2>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-2 font-black">Dispatch systemic announcements</p>
+              </div>
+
+              <Card className="rounded-[40px] border border-neon-border shadow-2xl p-10 bg-neon-card/50 backdrop-blur-md">
+                <div className="space-y-8">
+                  <div className="space-y-3">
+                    <Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Audience Scope</Label>
+                    <div className="flex bg-black/40 rounded-2xl p-1 border border-neon-border/50">
+                      <button onClick={() => setAnnouncementScope('all')} className={cn("flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", announcementScope === 'all' ? "bg-neon-cyan text-black shadow-[0_0_15px_rgba(0,242,255,0.4)]" : "text-gray-500 hover:text-gray-300")}>All Students</button>
+                      <button onClick={() => setAnnouncementScope('selected')} className={cn("flex-1 py-4 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all", announcementScope === 'selected' ? "bg-neon-cyan text-black shadow-[0_0_15px_rgba(0,242,255,0.4)]" : "text-gray-500 hover:text-gray-300")}>Selected Identities</button>
+                    </div>
+                  </div>
+
+                  {announcementScope === 'selected' && (
+                    <div className="space-y-3 animate-fade-in">
+                      <Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Select Identities Target</Label>
+                      <MultiSelect options={students.map(s => ({ label: s.name, value: s.id }))} selected={announcementStudents} onChange={setAnnouncementStudents} placeholder="Select target students..." />
+                    </div>
+                  )}
+
+                  <div className="space-y-3">
+                    <Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Message Detail</Label>
+                    <Textarea value={announcementText} onChange={(e) => setAnnouncementText(e.target.value)} className="min-h-[200px] rounded-[24px] border-neon-border bg-black/40 text-sm p-6 font-bold text-gray-200 resize-none placeholder:text-gray-700 focus:border-neon-cyan shadow-inner" placeholder="Enter broadcast transmission..." />
+                  </div>
+
+                  <Button onClick={handleSendAnnouncement} disabled={announcementSending} className="w-full h-16 bg-neon-cyan text-black rounded-[24px] shadow-xl transition-all text-xs font-black uppercase tracking-[0.2em] italic hover:scale-[1.02] mt-4 flex justify-center items-center gap-3">
+                    {announcementSending ? <RotateCcw className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />} {announcementSending ? 'TRANSMITTING...' : 'DISPATCH BROADCAST'}
+                  </Button>
+                </div>
+              </Card>
+            </div>
           )}
 
           {activeTab === 'generator' && (
@@ -710,7 +857,7 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
           <DialogHeader className="mb-10 text-center"><DialogTitle className="text-xl uppercase text-white tracking-tighter font-black italic">System Entry</DialogTitle><DialogDescription className="text-neon-cyan uppercase text-[9px] tracking-[0.3em] mt-2 font-black">Authorize New Profile</DialogDescription></DialogHeader>
           <div className="space-y-8">
             <div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Legal Full Name</Label><Input value={newStudentName} onChange={e => setNewStudentName(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5 focus:border-neon-cyan" /></div>
-            <div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Identity Token</Label><div className="flex gap-3"><Input value={newStudentId} onChange={e => setNewStudentId(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-lg px-5 text-neon-cyan font-black flex-1 tracking-widest" /><Button variant="outline" onClick={() => setNewStudentId('STU'+Math.floor(1000+Math.random()*9000))} className="h-14 w-14 rounded-2xl border-neon-border bg-black/40 hover:bg-neon-cyan/10 transition-all flex-shrink-0"><RefreshCw className="w-5 h-5 text-neon-cyan" /></Button></div></div>
+            <div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Identity Token</Label><div className="flex gap-3"><Input value={newStudentId} onChange={e => setNewStudentId(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-lg px-5 text-neon-cyan font-black flex-1 tracking-widest" /><Button variant="outline" onClick={() => setNewStudentId('STU' + Math.floor(1000 + Math.random() * 9000))} className="h-14 w-14 rounded-2xl border-neon-border bg-black/40 hover:bg-neon-cyan/10 transition-all flex-shrink-0"><RefreshCw className="w-5 h-5 text-neon-cyan" /></Button></div></div>
             <div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Secret Access Key</Label><Input value={newStudentPassword} onChange={e => setNewStudentPassword(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5 focus:border-neon-cyan" placeholder="••••••••" /></div>
           </div>
           <DialogFooter className="mt-12"><Button onClick={handleAddStudent} className="w-full bg-neon-cyan text-black h-16 rounded-[24px] shadow-lg uppercase text-[10px] tracking-[0.2em] transition-all hover:scale-105 font-black italic">AUTHORIZE ENTRY</Button></DialogFooter>
@@ -734,10 +881,10 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="rounded-[40px] max-w-md p-10 border border-neon-cyan/30 shadow-3xl bg-neon-card backdrop-blur-2xl"><div className="absolute top-0 left-0 w-full h-1 bg-neon-cyan shadow-[0_0_15px_#00f2ff]" /><DialogHeader className="mb-10 text-center"><DialogTitle className="text-xl uppercase text-white tracking-tighter font-black italic">Edit Profile</DialogTitle></DialogHeader>
           <div className="space-y-6">
-            <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Identity Name</Label><Input value={selectedStudent?.name || ''} onChange={e => setSelectedStudent(selectedStudent ? {...selectedStudent, name: e.target.value} : null)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" /></div>
-            <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black ml-1">System ID</Label><Input value={selectedStudent?.id || ''} onChange={e => setSelectedStudent(selectedStudent ? {...selectedStudent, id: e.target.value.toUpperCase()} : null)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-neon-cyan font-black tracking-widest px-5" /></div>
-            <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Access Key</Label><Input value={selectedStudent?.password || ''} onChange={e => setSelectedStudent(selectedStudent ? {...selectedStudent, password: e.target.value} : null)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" /></div>
-            <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black ml-1">System Status</Label><Select value={selectedStudent?.status} onValueChange={(v: any) => setSelectedStudent(selectedStudent ? {...selectedStudent, status: v} : null)}><SelectTrigger className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-black"><SelectValue /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border"><SelectItem value="active" className="text-green-400 font-black uppercase text-[10px]">ACTIVE</SelectItem><SelectItem value="inactive" className="text-gray-400 font-black uppercase text-[10px]">INACTIVE</SelectItem><SelectItem value="suspended" className="text-neon-pink font-black uppercase text-[10px]">SUSPENDED</SelectItem></SelectContent></Select></div>
+            <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Identity Name</Label><Input value={selectedStudent?.name || ''} onChange={e => setSelectedStudent(selectedStudent ? { ...selectedStudent, name: e.target.value } : null)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" /></div>
+            <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black ml-1">System ID</Label><Input value={selectedStudent?.id || ''} onChange={e => setSelectedStudent(selectedStudent ? { ...selectedStudent, id: e.target.value.toUpperCase() } : null)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-neon-cyan font-black tracking-widest px-5" /></div>
+            <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black ml-1">Access Key</Label><Input value={selectedStudent?.password || ''} onChange={e => setSelectedStudent(selectedStudent ? { ...selectedStudent, password: e.target.value } : null)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" /></div>
+            <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black ml-1">System Status</Label><Select value={selectedStudent?.status} onValueChange={(v: any) => setSelectedStudent(selectedStudent ? { ...selectedStudent, status: v } : null)}><SelectTrigger className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-black"><SelectValue /></SelectTrigger><SelectContent className="bg-neon-card border-neon-border"><SelectItem value="active" className="text-green-400 font-black uppercase text-[10px]">ACTIVE</SelectItem><SelectItem value="inactive" className="text-gray-400 font-black uppercase text-[10px]">INACTIVE</SelectItem><SelectItem value="suspended" className="text-neon-pink font-black uppercase text-[10px]">SUSPENDED</SelectItem></SelectContent></Select></div>
           </div>
           <DialogFooter className="mt-12"><Button onClick={handleEditStudent} className="w-full bg-neon-cyan text-black h-16 rounded-[24px] shadow-lg transition-all hover:scale-105 text-[10px] font-black uppercase tracking-[0.2em] italic">COMMIT PROFILE CHANGE</Button></DialogFooter>
         </DialogContent>
@@ -751,47 +898,252 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
       </Dialog>
 
       <Dialog open={showAdminProfileDialog} onOpenChange={setShowAdminProfileDialog}>
-        <DialogContent className="rounded-[40px] max-w-2xl p-12 border border-neon-cyan/20 bg-neon-card/90 backdrop-blur-3xl shadow-3xl font-inter"><div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-cyan via-neon-purple to-neon-pink" /><DialogHeader className="mb-12 text-center"><DialogTitle className="text-xl uppercase tracking-tighter text-white font-black italic">Settings</DialogTitle></DialogHeader><div className="grid grid-cols-1 md:grid-cols-2 gap-8"><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Label</Label><Input value={adminProfileData.name} onChange={e => setAdminProfileData({...adminProfileData, name: e.target.value})} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" /></div><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Master ID</Label><Input value={adminProfileData.id} disabled className="h-12 rounded-2xl border-neon-border bg-black/20 text-gray-600 font-black px-5 cursor-not-allowed opacity-50" /></div><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Secret Key</Label><Input value={adminProfileData.password} onChange={e => setAdminProfileData({...adminProfileData, password: e.target.value})} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5 focus:border-neon-pink" placeholder="••••••••" /></div><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Endpoint</Label><Input value={adminProfileData.email} onChange={e => setAdminProfileData({...adminProfileData, email: e.target.value})} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white text-xs px-5" /></div><div className="space-y-2 md:col-span-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Contact</Label><Input value={adminProfileData.contact} onChange={e => setAdminProfileData({...adminProfileData, contact: e.target.value})} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" /></div></div><div className="mt-12 max-w-xs mx-auto"><Button onClick={handleUpdateAdminProfile} className="w-full bg-neon-cyan text-black h-16 rounded-[24px] shadow-lg uppercase text-[10px] tracking-[0.3em] font-black italic">SAVE CONFIGURATION</Button></div></DialogContent>
+        <DialogContent className="rounded-[40px] max-w-2xl p-12 border border-neon-cyan/20 bg-neon-card/90 backdrop-blur-3xl shadow-3xl font-inter"><div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-cyan via-neon-purple to-neon-pink" /><DialogHeader className="mb-12 text-center"><DialogTitle className="text-xl uppercase tracking-tighter text-white font-black italic">Settings</DialogTitle></DialogHeader><div className="grid grid-cols-1 md:grid-cols-2 gap-8"><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Label</Label><Input value={adminProfileData.name} onChange={e => setAdminProfileData({ ...adminProfileData, name: e.target.value })} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" /></div><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Master ID</Label><Input value={adminProfileData.id} disabled className="h-12 rounded-2xl border-neon-border bg-black/20 text-gray-600 font-black px-5 cursor-not-allowed opacity-50" /></div><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Secret Key</Label><Input value={adminProfileData.password} onChange={e => setAdminProfileData({ ...adminProfileData, password: e.target.value })} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5 focus:border-neon-pink" placeholder="••••••••" /></div><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Endpoint</Label><Input value={adminProfileData.email} onChange={e => setAdminProfileData({ ...adminProfileData, email: e.target.value })} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white text-xs px-5" /></div><div className="space-y-2 md:col-span-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Contact</Label><Input value={adminProfileData.contact} onChange={e => setAdminProfileData({ ...adminProfileData, contact: e.target.value })} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" /></div></div><div className="mt-12 max-w-xs mx-auto"><Button onClick={handleUpdateAdminProfile} className="w-full bg-neon-cyan text-black h-16 rounded-[24px] shadow-lg uppercase text-[10px] tracking-[0.3em] font-black italic">SAVE CONFIGURATION</Button></div></DialogContent>
       </Dialog>
 
       <Dialog open={showMarkDialog} onOpenChange={setShowMarkDialog}>
-        <DialogContent className="rounded-[32px] max-w-[360px] p-6 border border-neon-cyan/30 bg-neon-card backdrop-blur-2xl shadow-3xl font-inter">
-          <div className="absolute top-0 left-0 w-full h-1 bg-neon-cyan shadow-[0_0_15px_#00f2ff]" />
-          <DialogHeader className="mb-6 text-center">
-            <DialogTitle className="text-lg uppercase text-white tracking-tighter font-black italic">Academic Review</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="p-5 rounded-[24px] bg-black/40 border border-neon-border shadow-inner text-center">
-              <p className="text-[8px] text-gray-500 uppercase font-black mb-2">Intelligence</p>
-              <p className="text-base text-white uppercase font-black italic leading-none mb-1">{selectedResult?.student_name}</p>
-              <p className="text-[9px] text-neon-cyan uppercase font-black">{selectedResult?.assessment_title}</p>
-            </div>
-            <div className="space-y-2">
-              <Label className="text-[9px] uppercase text-gray-500 ml-2 font-black">Score (%)</Label>
-              <Input type="number" value={markingScore} onChange={e => setMarkingScore(Number(e.target.value))} className="h-14 rounded-2xl border-neon-border bg-black/60 text-2xl text-center text-white font-black italic shadow-inner focus:border-neon-cyan" />
-            </div>
-            <div className="flex items-center justify-between p-5 bg-black/40 rounded-[24px] border border-neon-border">
-              <div className="space-y-0.5">
-                <Label className="text-[9px] font-black uppercase flex items-center gap-2 text-white">
-                  {markingStatus === 'released' ? <Eye className="w-4 h-4 text-neon-cyan" /> : <Shield className="w-4 h-4 text-gray-500" />}
-                  Visibility
-                </Label>
-                <p className="text-[8px] text-gray-500 font-black">{markingStatus === 'released' ? 'Released' : 'Pending'}</p>
+        <DialogContent className="rounded-[40px] w-[98vw] max-w-[1550px] p-0 border border-neon-cyan/20 bg-neon-card backdrop-blur-3xl shadow-3xl font-inter overflow-hidden h-[95vh] flex flex-col group/modal">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-cyan via-neon-purple to-neon-pink z-50 text-[10px] flex items-center justify-center font-black uppercase text-black tracking-[0.3em] overflow-hidden whitespace-nowrap">
+            PREMIUM REVIEW SESSION • ENCRYPTED SYNC ACTIVE •
+          </div>
+
+          {/* Header - Row 1: Title + Close */}
+          <div className="px-6 pt-7 pb-4 border-b border-neon-border/30 bg-black/40">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center text-neon-cyan shadow-inner shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <DialogTitle className="text-lg font-black text-white uppercase tracking-tighter italic leading-none">Review Workspace</DialogTitle>
+                  <DialogDescription className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1 truncate">
+                    <span className="text-neon-cyan">{selectedResult?.student_name}</span>
+                    <span className="mx-2 opacity-30">•</span>
+                    {selectedResult?.assessment_title}
+                  </DialogDescription>
+                </div>
               </div>
-              <Switch 
-                checked={markingStatus === 'released'} 
-                onCheckedChange={(checked) => { setMarkingScoreStatus(checked ? 'released' : 'pending'); setMarkingShowScore(checked); }} 
-              />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowMarkDialog(false)}
+                className="h-9 w-9 rounded-full bg-white/5 hover:bg-neon-pink/20 hover:text-neon-pink transition-all text-gray-500 shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            {/* Header - Row 2: Controls Bar */}
+            <div className="mt-4 flex items-center gap-3 flex-wrap">
+              {/* Live Score Badge */}
+              <div className="flex items-center gap-2 bg-black/50 border border-neon-cyan/20 rounded-2xl px-4 py-2 shadow-inner">
+                <p className="text-[8px] text-gray-500 uppercase font-black tracking-widest">Score</p>
+                <p className={cn("text-xl font-black tracking-tighter", markingScore >= 50 ? "text-neon-cyan" : "text-neon-pink")}>
+                  {markingScore}%
+                </p>
+                <div className="w-px h-4 bg-neon-border/40 mx-1" />
+                <Input
+                  type="number"
+                  value={markingScore}
+                  onChange={e => setMarkingScore(Number(e.target.value))}
+                  className="h-7 w-14 rounded-lg border-neon-border/50 bg-transparent text-xs text-center text-gray-400 font-black focus:border-neon-cyan focus:ring-0 p-1"
+                  title="Override score manually"
+                />
+              </div>
+
+              {/* Visibility Toggle */}
+              <div className="flex items-center gap-2 bg-black/50 border border-neon-border/30 rounded-2xl px-4 py-2">
+                <p className="text-[8px] text-gray-500 font-black uppercase tracking-widest">Release to student</p>
+                <Switch
+                  checked={markingStatus === 'released'}
+                  onCheckedChange={(checked) => setMarkingScoreStatus(checked ? 'released' : 'pending')}
+                  className="data-[state=checked]:bg-neon-cyan"
+                />
+                <p className={cn("text-[9px] font-black uppercase tracking-widest", markingStatus === 'released' ? "text-neon-cyan" : "text-neon-yellow")}>
+                  {markingStatus === 'released' ? 'Released' : 'Hidden'}
+                </p>
+              </div>
+
+              {/* Spacer */}
+              <div className="flex-1" />
+
+              {/* Commit Button */}
+              <Button
+                onClick={handleUpdateResult}
+                className="bg-neon-cyan text-black px-8 rounded-2xl h-10 shadow-lg uppercase text-[10px] font-black tracking-widest transition-all italic hover:scale-105 active:scale-95 border-none shrink-0"
+              >
+                COMMIT CHANGES & SYNC
+              </Button>
             </div>
           </div>
-          <DialogFooter className="mt-8">
-            <Button onClick={handleUpdateResult} className="w-full bg-neon-cyan text-black h-12 rounded-xl shadow-lg uppercase tracking-[0.2em] text-[9px] transition-all hover:scale-105 font-black italic">COMMIT RECORD</Button>
-          </DialogFooter>
+
+          <div className="flex-1 flex overflow-hidden">
+            <ScrollArea className="flex-1 p-6 md:p-8">
+              <div className="space-y-8 max-w-5xl mx-auto pb-40 md:pb-20">
+                {(() => {
+                  const asmt = assessments.find(a => a.id === selectedResult?.assessment_id);
+                  const questions = asmt?.structured_questions || [];
+                  const studentAnswers = selectedResult?.answers || {};
+
+                  return questions.map((q: any, idx: number) => {
+                    const studentAns = studentAnswers[idx.toString()] ?? studentAnswers[idx];
+                    const isManualMarked = markingManualMarking[idx.toString()] || markingManualMarking[idx];
+
+                    return (
+                      <Card key={idx} className="rounded-[32px] border border-neon-border bg-black/20 overflow-hidden group hover:border-white/10 transition-all">
+                        <div className="bg-black/40 p-4 px-6 md:px-8 border-b border-neon-border/30 flex justify-between items-center flex-wrap gap-4">
+                          <div className="flex items-center gap-4">
+                            <span className="text-[10px] font-black text-neon-cyan uppercase tracking-widest">Section {idx + 1}</span>
+                            <Badge variant="outline" className="text-[7px] font-black opacity-40">{q.type.toUpperCase()}</Badge>
+                          </div>
+
+                          <div className="flex bg-black/60 p-1 rounded-xl border border-neon-border/50">
+                            {[
+                              { label: 'Correct', icon: Check, color: 'text-emerald-400', key: 'correct' },
+                              { label: 'Partial', icon: AlertCircle, color: 'text-blue-400', key: 'partial' },
+                              { label: 'Wrong', icon: X, color: 'text-rose-400', key: 'incorrect' }
+                            ].map(btn => (
+                              <button
+                                key={btn.key}
+                                onClick={() => setMarkingManualMarking(prev => ({ ...prev, [idx]: btn.key }))}
+                                className={cn(
+                                  "w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center transition-all",
+                                  isManualMarked === btn.key ? "bg-white/10 " + btn.color : "text-gray-600 hover:text-gray-400"
+                                )}
+                                title={btn.label}
+                              >
+                                <btn.icon className="w-3 h-3 md:w-4 md:h-4" />
+                              </button>
+                            ))}
+                            <div className="w-px h-8 md:h-10 bg-neon-border/30 mx-1" />
+                            <button
+                              onClick={() => {
+                                const newMarking = { ...markingManualMarking };
+                                delete newMarking[idx];
+                                setMarkingManualMarking(newMarking);
+                              }}
+                              className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center text-gray-600 hover:text-orange-400 transition-all"
+                              title="Reset Marking"
+                            >
+                              <RotateCcw className="w-3 md:w-3.5 h-3 md:h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <CardContent className="p-6 md:p-8">
+                          <p className="text-white text-sm md:text-base font-bold italic mb-6 md:mb-8 leading-relaxed">
+                            {q.type === 'objective' ? q.objectiveText : q.text}
+                          </p>
+
+                          {q.type === 'objective' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {q.options.map((opt: string, optIdx: number) => {
+                                const isSelected = studentAns === optIdx;
+                                const isCorrect = q.correctAnswer === optIdx;
+
+                                return (
+                                  <div
+                                    key={optIdx}
+                                    className={cn(
+                                      "p-4 rounded-2xl border-2 transition-all flex items-center gap-4",
+                                      isSelected ? "bg-white/5 border-white/20" : "bg-black/20 border-neon-border/30",
+                                      isCorrect && isSelected ? "border-emerald-500/50 bg-emerald-500/5" :
+                                        !isCorrect && isSelected ? "border-rose-500/50 bg-rose-500/5" : ""
+                                    )}
+                                  >
+                                    <div className={cn(
+                                      "w-7 h-7 md:w-8 md:h-8 rounded-xl flex items-center justify-center font-black text-[10px] md:text-xs",
+                                      isCorrect ? "bg-emerald-500 text-black" : "bg-black/60 text-gray-500"
+                                    )}>
+                                      {String.fromCharCode(65 + optIdx)}
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className={cn("text-[10px] md:text-[11px] font-bold line-clamp-2", isCorrect ? "text-emerald-400" : "text-gray-400")}>{opt}</p>
+                                    </div>
+                                    {isSelected && (
+                                      <Badge className={cn("text-[6px] md:text-[7px] font-black uppercase px-2", isCorrect ? "bg-emerald-500 text-black" : "bg-rose-500 text-white")}>
+                                        {isCorrect ? 'Match' : 'Mismatch'}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="space-y-6">
+                              <div className="p-4 md:p-6 rounded-[24px] md:rounded-3xl bg-blue-500/5 border border-blue-500/20 shadow-inner">
+                                <p className="text-[8px] text-blue-400 uppercase font-black mb-2 md:mb-3 tracking-widest">Student Submission</p>
+                                <p className="text-xs md:text-sm text-gray-200 font-bold leading-relaxed italic">
+                                  {studentAns || <span className="opacity-30">No answer provided</span>}
+                                </p>
+                              </div>
+                              <div className="p-4 md:p-6 rounded-[24px] md:rounded-3xl bg-emerald-500/5 border border-emerald-500/20">
+                                <div className="flex items-center gap-2 mb-2 md:mb-3">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  <p className="text-[8px] text-emerald-400 uppercase font-black tracking-widest">Model Solution / Rubric</p>
+                                </div>
+                                <p className="text-[10px] md:text-xs text-gray-400 font-medium leading-relaxed italic">
+                                  {q.modelAnswer || "No rubric defined for this question."}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  });
+                })()}
+
+                <div className="mt-16 space-y-10 border-t border-neon-border/30 pt-16 pb-20 max-w-4xl mx-auto">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center text-neon-cyan">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <Label className="text-sm text-white uppercase font-black tracking-widest">Final Evaluation & Feedback</Label>
+                    </div>
+                    <Textarea
+                      value={markingFeedback}
+                      onChange={e => setMarkingFeedback(e.target.value)}
+                      className="min-h-[160px] rounded-[32px] border-neon-border bg-black/40 text-base p-8 font-bold text-gray-200 resize-none placeholder:text-gray-700 focus:border-neon-cyan shadow-inner"
+                      placeholder="Enter the final summary of performance..."
+                    />
+                  </div>
+
+                  <div className="p-8 rounded-[40px] bg-neon-cyan/5 border border-neon-cyan/20 backdrop-blur-sm relative overflow-hidden group/stats">
+                    <div className="absolute top-0 right-0 p-8 opacity-10">
+                      <CheckCircle className="w-24 h-24 text-neon-cyan" />
+                    </div>
+                    <p className="text-[10px] text-neon-cyan uppercase font-black mb-6 tracking-widest flex items-center gap-2">
+                      <ActivityIcon className="w-4 h-4" /> Performance Intelligence Summary
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                      <div className="space-y-2">
+                        <p className="text-[10px] text-gray-500 uppercase font-black">Marked Progress</p>
+                        <p className="text-3xl font-black text-white">{Object.keys(markingManualMarking).length} <span className="text-xs opacity-30">Units</span></p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[10px] text-gray-500 uppercase font-black">Raw Accuracy</p>
+                        <p className="text-3xl font-black text-neon-cyan tracking-tighter">{markingScore}%</p>
+                      </div>
+                      <div className="flex items-end pb-1">
+                        <Badge className="bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase italic">
+                          {markingStatus === 'released' ? 'VERIFIED' : 'PENDING REVIEW'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+          </div>
+
+
         </DialogContent>
       </Dialog>
 
       <Dialog open={showAddCourseDialog} onOpenChange={(open) => { setShowAddCourseDialog(open); if (!open) { setSelectedCourseToEdit(null); setNewCourse({ id: '', name: '', code: '', instructor: '', color: 'from-blue-500 to-indigo-500', image: '/course-placeholder.svg' }); } }}>
-        <DialogContent className="rounded-[40px] max-w-md p-10 border border-neon-cyan/20 bg-neon-card backdrop-blur-2xl shadow-3xl overflow-hidden"><div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-cyan to-neon-purple shadow-lg" /><DialogHeader className="mb-10 text-center"><DialogTitle className="text-xl uppercase text-white tracking-tighter font-black italic">{selectedCourseToEdit ? 'Modify Module' : 'Initialize Module'}</DialogTitle></DialogHeader><div className="space-y-6"><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Name</Label><Input value={newCourse.name} onChange={e => setNewCourse({...newCourse, name: e.target.value.toUpperCase()})} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" /></div><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Code</Label><Input value={newCourse.code} onChange={e => setNewCourse({...newCourse, code: e.target.value.toUpperCase()})} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-black px-5" /></div><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">ID</Label><Input value={newCourse.id} onChange={e => setNewCourse({...newCourse, id: e.target.value.toUpperCase()})} disabled={!!selectedCourseToEdit} className="h-12 rounded-2xl border-neon-border bg-black/20 text-gray-600 font-black px-5" /></div></div><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Instructor</Label><Input value={newCourse.instructor} onChange={e => setNewCourse({...newCourse, instructor: e.target.value})} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" /></div></div><DialogFooter className="mt-12"><Button onClick={handleAddCourse} className="w-full bg-neon-cyan text-black h-16 rounded-[24px] shadow-lg uppercase text-[10px] tracking-[0.3em] font-black italic">{selectedCourseToEdit ? 'SYNC MODULE' : 'INITIALIZE MODULE'}</Button></DialogFooter></DialogContent>
+        <DialogContent className="rounded-[40px] max-w-md p-10 border border-neon-cyan/20 bg-neon-card backdrop-blur-2xl shadow-3xl overflow-hidden"><div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-cyan to-neon-purple shadow-lg" /><DialogHeader className="mb-10 text-center"><DialogTitle className="text-xl uppercase text-white tracking-tighter font-black italic">{selectedCourseToEdit ? 'Modify Module' : 'Initialize Module'}</DialogTitle></DialogHeader><div className="space-y-6"><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Name</Label><Input value={newCourse.name} onChange={e => setNewCourse({ ...newCourse, name: e.target.value.toUpperCase() })} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" /></div><div className="grid grid-cols-2 gap-4"><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Code</Label><Input value={newCourse.code} onChange={e => setNewCourse({ ...newCourse, code: e.target.value.toUpperCase() })} className="h-12 rounded-2xl border-neon-border bg-black/40 text-white font-black px-5" /></div><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">ID</Label><Input value={newCourse.id} onChange={e => setNewCourse({ ...newCourse, id: e.target.value.toUpperCase() })} disabled={!!selectedCourseToEdit} className="h-12 rounded-2xl border-neon-border bg-black/20 text-gray-600 font-black px-5" /></div></div><div className="space-y-2"><Label className="text-[10px] text-gray-500 uppercase font-black ml-1">Instructor</Label><Input value={newCourse.instructor} onChange={e => setNewCourse({ ...newCourse, instructor: e.target.value })} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" /></div></div><DialogFooter className="mt-12"><Button onClick={handleAddCourse} className="w-full bg-neon-cyan text-black h-16 rounded-[24px] shadow-lg uppercase text-[10px] tracking-[0.3em] font-black italic">{selectedCourseToEdit ? 'SYNC MODULE' : 'INITIALIZE MODULE'}</Button></DialogFooter></DialogContent>
       </Dialog>
     </div>
   );

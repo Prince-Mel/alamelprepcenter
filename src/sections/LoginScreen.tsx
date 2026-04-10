@@ -23,7 +23,7 @@ interface LoginScreenProps {
 export function LoginScreen({ onLogin }: LoginScreenProps) {
   const [isRegistering, setIsRegistering] = useState(false);
   const [role, setRole] = useState<'student' | 'admin'>('student');
-  
+
   // Form fields
   const [name, setName] = useState('');
   const [id, setId] = useState('');
@@ -41,7 +41,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
+
     // Simulate processing
     await new Promise(resolve => setTimeout(resolve, 1500));
 
@@ -78,7 +78,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     } finally {
       setIsLoading(false);
     }
-    
+
     // Clear form
     setName('');
     setPhone('');
@@ -137,14 +137,14 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
       {/* Content Container */}
       <div className="relative z-10 w-full max-w-7xl flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-20 p-4 lg:p-12 h-full">
-        
+
         {/* Left Side - Branding */}
         <div className="flex flex-col items-center lg:items-start text-center lg:text-left text-white drop-shadow-lg animate-slide-in-up">
           <div className="w-24 h-24 lg:w-40 lg:h-40 bg-white rounded-full flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(255,255,255,0.3)] overflow-hidden border-4 border-alamel-aquamarine relative">
-            <img 
-              src="/favicon.png" 
-              alt="AlaMel Logo" 
-              className="w-full h-full object-cover rounded-full scale-[1.7] object-center" 
+            <img
+              src="/favicon.png"
+              alt="AlaMel Logo"
+              className="w-full h-full object-cover rounded-full scale-[1.7] object-center"
             />
           </div>
           <h1 className="text-4xl lg:text-6xl font-bold tracking-tight mb-2 drop-shadow-md">AlaMel</h1>
@@ -160,8 +160,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
               {isRegistering ? 'Create Account' : 'Welcome Back'}
             </CardTitle>
             <CardDescription className="text-center text-alamel-darkGray text-[10px] lg:text-xs uppercase tracking-widest font-semibold">
-              {isRegistering 
-                ? 'Fill in the form to request an account' 
+              {isRegistering
+                ? 'Fill in the form to request an account'
                 : 'Enter your credentials to access your account'}
             </CardDescription>
           </CardHeader>

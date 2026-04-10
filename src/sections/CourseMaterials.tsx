@@ -222,7 +222,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
       toast.info('Access Restricted: This material is awaiting admin approval.');
       return;
     }
-    
+
     if (item.type === 'videos' && item.url) {
       if (item.url.includes('cloudinary.com') || item.url.startsWith('http')) {
         window.open(item.url, '_blank');
@@ -253,9 +253,9 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
       const win = window.open();
       if (win) {
         if (item.url.startsWith('data:application/pdf')) {
-             win.document.write(`<iframe src="${item.url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
+          win.document.write(`<iframe src="${item.url}" frameborder="0" style="border:0; top:0px; left:0px; bottom:0px; right:0px; width:100%; height:100%;" allowfullscreen></iframe>`);
         } else {
-             win.location.href = item.url;
+          win.location.href = item.url;
         }
       }
     } else {
@@ -309,7 +309,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
   const handleDelete = (e: React.MouseEvent, id: string) => {
     e.stopPropagation(); // Prevent handleView from triggering
     if (!confirm('Are you sure you want to delete this material?')) return;
-    
+
     fetch(`${API_URL}/api/materials/${id}`, { method: 'DELETE' })
       .then(res => {
         if (res.ok) {
@@ -323,26 +323,26 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
   const filteredMaterials = useMemo(() => {
     return uploadedMaterials.filter(m => {
       if (m.type !== selectedMaterial) return false;
-    
+
       const isForThisCourse = m.course_id === course.id;
       const isGlobal = m.course_id === 'GLOBAL';
       if (!isForThisCourse && !isGlobal) return false;
-    
+
       // Admin and Sub-Admin can see everything in the course/global context
       if (userRole === 'admin' || userRole === 'sub-admin') {
         // Apply search even for admin
-        return m.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-               (m.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+        return m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (m.description || '').toLowerCase().includes(searchQuery.toLowerCase());
       }
-    
+
       // Student Visibility Logic
       const isApproved = m.approved == 1 || m.approved === true;
       const isMyOwnUpload = m.uploaded_by === user.id;
-    
+
       if (!isApproved && !isMyOwnUpload) {
         return false; // Hide unapproved materials that aren't mine
       }
-    
+
       // Handle materials assigned to specific students
       let assignedIds: string[] = [];
       try {
@@ -354,15 +354,15 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
       } catch (e) {
         assignedIds = [];
       }
-    
+
       // If a material has specific assignees, I must be one of them
       if (assignedIds.length > 0 && !assignedIds.includes(user.id)) {
         return false;
       }
-    
+
       // Apply search
-      return m.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
-             (m.description || '').toLowerCase().includes(searchQuery.toLowerCase());
+      return m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (m.description || '').toLowerCase().includes(searchQuery.toLowerCase());
     });
   }, [uploadedMaterials, selectedMaterial, course.id, user.id, userRole, searchQuery]);
 
@@ -377,22 +377,27 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
   // Filter results for this course and material type
   const relevantResults = (results || []).filter(r => {
     if (r.course_id !== course.id) return false;
-    
+
     // Find assessment definition
     const assessmentDef = (assessments || []).find((a: any) => a.id === r.assessment_id);
     const type = assessmentDef?.type || r.assessment_type;
-    
+
     // Check type if available, otherwise check title heuristic for legacy data
+    let matchesType = false;
     if (selectedMaterial === 'quiz') {
-      return type === 'quiz' || (!type && r.assessment_title.toLowerCase().includes('quiz'));
+      matchesType = type === 'quiz' || (!type && r.assessment_title.toLowerCase().includes('quiz'));
+    } else if (selectedMaterial === 'examination') {
+      matchesType = type === 'examination' || (!type && (r.assessment_title.toLowerCase().includes('exam') || r.assessment_title.toLowerCase().includes('test')));
+    } else if (selectedMaterial === 'assignments') {
+      matchesType = type === 'assignment' || (!type && r.assessment_title.toLowerCase().includes('assignment'));
     }
-    if (selectedMaterial === 'examination') {
-      return type === 'examination' || (!type && (r.assessment_title.toLowerCase().includes('exam') || r.assessment_title.toLowerCase().includes('test')));
-    }
-    if (selectedMaterial === 'assignments') {
-      return type === 'assignment' || (!type && r.assessment_title.toLowerCase().includes('assignment'));
-    }
-    return false;
+
+    if (!matchesType) return false;
+
+    // Completely hide pending results from students so the assessment fully vanishes until graded
+    if (userRole === 'student' && r.status === 'pending') return false;
+
+    return true;
   });
 
   return (
@@ -413,7 +418,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
           {materials.map((type, index) => {
             const config = materialConfig[type];
             const Icon = config.icon;
-            
+
             return (
               <Card
                 key={type}
@@ -456,13 +461,13 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                 <p className="text-alamel-darkGray text-sm">{course.name}</p>
               </div>
             </div>
-            
+
             <div className="flex flex-1 max-w-md relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input 
-                placeholder={`Search ${materialConfig[selectedMaterial].title.toLowerCase()}...`} 
-                value={searchQuery} 
-                onChange={(e) => setSearchQuery(e.target.value)} 
+              <Input
+                placeholder={`Search ${materialConfig[selectedMaterial].title.toLowerCase()}...`}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 h-11 rounded-xl border-gray-200 bg-white/50 focus-visible:ring-blue-500 shadow-sm"
               />
             </div>
@@ -490,12 +495,12 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                       </div>
                       {selectedMaterial === 'videos' && (
                         <div className="flex bg-gray-100 p-1 rounded-lg gap-1">
-                          <button 
+                          <button
                             type="button"
                             onClick={() => setVideoUploadType('link')}
                             className={`flex-1 py-1 text-sm rounded-md transition-all ${videoUploadType === 'link' ? 'bg-white shadow-sm font-bold text-blue-600' : 'text-gray-500'}`}
                           > Online Link</button>
-                          <button 
+                          <button
                             type="button"
                             onClick={() => setVideoUploadType('file')}
                             className={`flex-1 py-1 text-sm rounded-md transition-all ${videoUploadType === 'file' ? 'bg-white shadow-sm font-bold text-blue-600' : 'text-gray-500'}`}
@@ -510,10 +515,10 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                       ) : (
                         <div className="space-y-2">
                           <Label>{selectedMaterial === 'videos' ? 'Video File' : 'File Upload'}</Label>
-                          <Input 
-                            type="file" 
+                          <Input
+                            type="file"
                             accept={selectedMaterial === 'videos' ? "video/*" : ".pdf,.doc,.docx,.txt"}
-                            onChange={(e) => setNewMaterialFile(e.target.files?.[0] || null)} 
+                            onChange={(e) => setNewMaterialFile(e.target.files?.[0] || null)}
                           />
                         </div>
                       )}
@@ -545,12 +550,11 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
             <div className={`grid gap-4 ${selectedMaterial === 'videos' ? 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1'}`}>
               {filteredMaterials.length > 0 ? (
                 filteredMaterials.map((item, index) => (
-                  <Card 
-                    key={item.id} 
-                    className={`hover:shadow-md transition-all animate-slide-in-up group relative ${
-                      (userRole === 'admin' || item.approved) ? 'cursor-pointer' : 'opacity-80'
-                    }`} 
-                    onClick={() => handleView(item)} 
+                  <Card
+                    key={item.id}
+                    className={`hover:shadow-md transition-all animate-slide-in-up group relative ${(userRole === 'admin' || item.approved) ? 'cursor-pointer' : 'opacity-80'
+                      }`}
+                    onClick={() => handleView(item)}
                     style={{ animationDelay: `${index * 0.05}s` }}
                   >
                     {selectedMaterial === 'videos' ? (
@@ -572,9 +576,8 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                               <span className="text-[10px] text-gray-400 font-bold uppercase">Local Video File</span>
                             </div>
                           )}
-                          <div className={`absolute inset-0 bg-black/20 transition-colors flex items-center justify-center ${
-                            (userRole === 'admin' || item.approved) ? 'group-hover:bg-black/40' : ''
-                          }`}>
+                          <div className={`absolute inset-0 bg-black/20 transition-colors flex items-center justify-center ${(userRole === 'admin' || item.approved) ? 'group-hover:bg-black/40' : ''
+                            }`}>
                             {(userRole === 'admin' || item.approved) && (
                               <PlayCircle className="w-12 h-12 text-white opacity-80 group-hover:scale-110 transition-transform" />
                             )}
@@ -632,7 +635,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                         </div>
                       </CardContent>
                     )}
-                    
+
                     {/* Admin/Pending Controls for Video Grid */}
                     {selectedMaterial === 'videos' && (
                       <div className="absolute top-2 right-2 flex gap-1">
@@ -675,9 +678,9 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                     <History className="w-5 h-5 text-gray-500" /> Assessment History
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {relevantResults.sort((a,b) => b.id.localeCompare(a.id)).map((result) => (
-                      <Card 
-                        key={result.id} 
+                    {relevantResults.sort((a, b) => b.id.localeCompare(a.id)).map((result) => (
+                      <Card
+                        key={result.id}
                         className="cursor-pointer hover:shadow-md transition-all border border-gray-200 hover:border-blue-200"
                         onClick={() => setSelectedResult(result)}
                       >
@@ -690,17 +693,17 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                           </div>
                           <h4 className="font-bold text-gray-800 line-clamp-1">{result.assessment_title}</h4>
                           <div className="mt-3 flex justify-between items-end">
-                             {result.status === 'released' ? (
-                                <div>
-                                  <p className="text-2xl font-bold text-blue-600">{result.score}%</p>
-                                  <p className="text-[10px] text-gray-400 font-bold uppercase">Score</p>
-                                </div>
-                             ) : (
-                               <p className="text-sm text-gray-400 italic">Waiting for grade...</p>
-                             )}
-                             <Button size="sm" variant="ghost" className="text-blue-600 hover:text-blue-800 p-0 h-auto">
-                               Details <ChevronRight className="w-4 h-4 ml-1" />
-                             </Button>
+                            {result.status === 'released' ? (
+                              <div>
+                                <p className="text-2xl font-bold text-blue-600">{result.score}%</p>
+                                <p className="text-[10px] text-gray-400 font-bold uppercase">Score</p>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-400 italic">Waiting for grade...</p>
+                            )}
+                            <Button size="sm" variant="ghost" className="text-blue-600 hover:text-blue-800 p-0 h-auto">
+                              Details <ChevronRight className="w-4 h-4 ml-1" />
+                            </Button>
                           </div>
                         </CardContent>
                       </Card>
@@ -720,7 +723,7 @@ export function CourseMaterials({ course, selectedMaterial, onMaterialSelect, on
                 <p className="text-alamel-darkGray mb-6 max-w-md mx-auto">
                   Check if there are any new {materialConfig[selectedMaterial].title.toLowerCase()} assigned to you.
                 </p>
-                <Button 
+                <Button
                   onClick={() => {
                     if (user.role === 'student' && (user as Student).status === 'suspended') {
                       toast.error('Your account is currently suspended. You cannot participate in assessments.');

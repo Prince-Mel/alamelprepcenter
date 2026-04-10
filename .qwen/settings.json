@@ -18,7 +18,9 @@
       "Bash(start-ai.bat)",
       "Bash(git diff *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git pull *)",
+      "Bash(git checkout *)"
     ]
   },
   "$version": 3
