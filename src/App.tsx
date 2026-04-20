@@ -1,5 +1,6 @@
 import { useState, useEffect, Component, type ReactNode } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { LoginScreen } from './sections/LoginScreen';
 import { StudentDashboard } from './sections/StudentDashboard';
 import { AdminDashboard } from './sections/AdminDashboard';
@@ -211,6 +212,7 @@ function App() {
             <Route path="*" element={<Navigate to={currentUser ? (currentUser.role === 'student' ? '/student' : '/admin') : '/login'} replace />} />
           </Routes>
         )}
+        <SpeedInsights />
       </div>
     </ErrorBoundary>
   );
