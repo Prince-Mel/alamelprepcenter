@@ -123,7 +123,7 @@ interface UploadedMaterial {
 
 export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser }: AdminDashboardProps) {
   const isMobile = useIsMobile();
-  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5000`;
+  const API_URL = import.meta.env.VITE_API_URL || `http://${window.location.hostname}:5001`;
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   // Core Data State
@@ -386,20 +386,22 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
       return;
     }
     try {
-      console.log('Updating result:', selectedResult.id, { score: markingScore, status: markingStatus, show_score: markingStatus === 'released' });
+      const payload = {
+        score: markingScore,
+        status: markingStatus,
+        show_score: markingStatus === 'released',
+        manual_marking: markingManualMarking,
+        feedback: markingFeedback
+      };
       const res = await fetch(`${API_URL}/api/results/${selectedResult.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          score: markingScore,
-          status: markingStatus,
-          show_score: markingStatus === 'released',
-          manual_marking: markingManualMarking,
-          feedback: markingFeedback
-        })
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
-        fetchData();
+        // Update local state with the latest values
+        setSelectedResult((prev: any) => ({ ...prev, ...payload }));
+        fetchData(); // Sync list view
         setShowMarkDialog(false);
         toast.success('Result Updated Successfully');
       } else {
@@ -770,8 +772,34 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
             <Card className="rounded-[32px] border border-neon-border shadow-2xl p-10 bg-neon-card/50 backdrop-blur-md overflow-hidden">
               <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-6"><div><h2 className="text-2xl uppercase tracking-tighter text-white font-black italic">Academic Intelligence</h2><p className="text-[10px] text-gray-500 uppercase font-black mt-2">Performance History</p></div><Button onClick={() => toast.info('Advanced filtering coming soon')} variant="outline" className="rounded-2xl border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan transition-all uppercase text-[10px] font-black h-12 px-8 tracking-widest italic shadow-lg"><Filter className="w-4 h-4 mr-3" /> FILTER ENGINE</Button></div>
               <Table>
-                <TableHeader className="bg-black/40 border-b border-neon-border/50"><TableRow className="hover:bg-transparent"><TableHead className="px-8 py-6 text-neon-cyan uppercase text-[10px] font-black">Student Profile</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black">Performance</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black">Visibility</TableHead><TableHead className="text-right px-8 text-neon-cyan uppercase text-[10px] font-black">Action</TableHead></TableRow></TableHeader>
-                <TableBody>{results.map(r => (<TableRow key={r.id} className="border-b border-neon-border/20 hover:bg-neon-cyan/5 transition-colors group"><TableCell className="px-8 py-8"><div className="flex items-center gap-5"><Avatar className="w-12 h-12 border border-neon-cyan/30 shadow-lg ring-2 ring-black"><AvatarFallback className="bg-neon-card text-neon-cyan uppercase text-xs font-black italic">{r.student_name?.[0] || 'S'}</AvatarFallback></Avatar><div><p className="text-white text-base tracking-tight font-black italic uppercase leading-tight">{r.student_name}</p><p className="text-[10px] text-gray-500 font-black uppercase mt-1">{r.student_id}</p></div></div></TableCell><TableCell className="text-center"><span className={cn("text-2xl font-black tracking-tighter italic", r.score >= 50 ? 'text-neon-cyan' : 'text-neon-pink')}>{r.score}%</span></TableCell><TableCell className="text-center"><Badge className={cn("px-5 py-2 rounded-full text-[9px] uppercase font-black border italic", r.status === 'released' ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30 shadow-[0_0_10px_rgba(0,242,255,0.1)]' : 'bg-neon-yellow/10 text-neon-yellow border-neon-yellow/30 shadow-[0_0_10px_rgba(255,242,0,0.1)]')}>{r.status}</Badge></TableCell><TableCell className="text-right px-8"><Button onClick={() => { setSelectedResult(r); setMarkingScore(r.score); setMarkingScoreStatus(r.status === 'released' ? 'released' : 'pending'); setMarkingManualMarking(r.manual_marking || {}); setMarkingFeedback(r.feedback || ''); setShowMarkDialog(true); }} className="bg-neon-cyan text-black hover:shadow-lg px-8 rounded-2xl h-12 shadow-xl uppercase text-[10px] font-black tracking-widest transition-all italic hover:scale-105">REVIEW</Button></TableCell></TableRow>))}</TableBody>
+                <TableHeader className="bg-black/40 border-b border-neon-border/50"><TableRow className="hover:bg-transparent"><TableHead className="px-8 py-6 text-neon-cyan uppercase text-[10px] font-black">Student Profile</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black">Assessment</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black">Outcome</TableHead><TableHead className="text-right px-8 text-neon-cyan uppercase text-[10px] font-black">Action</TableHead></TableRow></TableHeader>
+                <TableBody>{results.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map(r => (<TableRow key={r.id} className="border-b border-neon-border/20 hover:bg-neon-cyan/5 transition-colors group">
+                  <TableCell className="px-8 py-8"><div className="flex items-center gap-5"><Avatar className="w-12 h-12 border border-neon-cyan/30 shadow-lg ring-2 ring-black"><AvatarFallback className="bg-neon-card text-neon-cyan uppercase text-xs font-black italic">{r.student_name?.[0] || 'S'}</AvatarFallback></Avatar><div><p className="text-white text-base tracking-tight font-black italic uppercase leading-tight">{r.student_name}</p><p className="text-[10px] text-gray-500 font-black uppercase mt-1">{r.student_id}</p></div></div></TableCell>
+                  <TableCell className="text-center">
+                    <p className="text-white text-sm font-black uppercase italic tracking-tighter leading-none mb-1">{r.assessment_title}</p>
+                    <p className="text-[9px] text-neon-cyan/60 font-black uppercase tracking-widest">{results.filter(res => res.assessment_id === r.assessment_id).length} Submissions</p>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <span className={cn("text-2xl font-black tracking-tighter italic block mb-1", r.score >= 50 ? 'text-neon-cyan' : 'text-neon-pink')}>{r.score}%</span>
+                    <Badge className={cn("px-4 py-1 rounded-full text-[8px] uppercase font-black border italic", r.status === 'released' ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30 shadow-[0_0_10px_rgba(0,242,255,0.1)]' : 'bg-neon-yellow/10 text-neon-yellow border-neon-yellow/30 shadow-[0_0_10px_rgba(255,242,0,0.1)]')}>{r.status}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right px-8"><Button onClick={async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/results/${r.id}`);
+      if (res.ok) {
+        const liveResult = await res.json();
+        setSelectedResult(liveResult);
+        setMarkingScore(liveResult.score);
+        setMarkingScoreStatus(liveResult.status === 'released' ? 'released' : 'pending');
+        setMarkingManualMarking(liveResult.manual_marking || {});
+        setMarkingFeedback(liveResult.feedback || '');
+        setShowMarkDialog(true);
+      } else {
+        toast.error('Failed to fetch latest result data');
+      }
+    } catch(e) { toast.error('Error fetching live data'); }
+  }} className="bg-neon-cyan text-black hover:shadow-lg px-8 rounded-2xl h-12 shadow-xl uppercase text-[10px] font-black tracking-widest transition-all italic hover:scale-105">REVIEW</Button></TableCell>
+                </TableRow>))}</TableBody>
               </Table>
             </Card>
           )}
@@ -943,13 +971,12 @@ export function AdminDashboard({ user, onLogout, onSwitchToStudent, onUpdateUser
                 </p>
                 <div className="w-px h-4 bg-neon-border/40 mx-1" />
                 <Input
-                  type="number"
-                  value={markingScore}
-                  onChange={e => setMarkingScore(Number(e.target.value))}
-                  className="h-7 w-14 rounded-lg border-neon-border/50 bg-transparent text-xs text-center text-gray-400 font-black focus:border-neon-cyan focus:ring-0 p-1"
-                  title="Override score manually"
-                />
-              </div>
+                type="number"
+                value={markingScore}
+                onChange={e => setMarkingScore(Number(e.target.value))}
+                className="h-7 w-14 rounded-lg border-neon-border/50 bg-transparent text-xs text-center text-white font-black focus:border-neon-cyan focus:ring-0 p-1"
+                title="Override score manually"
+                />              </div>
 
               {/* Visibility Toggle */}
               <div className="flex items-center gap-2 bg-black/50 border border-neon-border/30 rounded-2xl px-4 py-2">

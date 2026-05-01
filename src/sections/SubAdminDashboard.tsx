@@ -163,6 +163,14 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
   const [newStudentPassword, setNewStudentPassword] = useState('');
   const [generatedCredentials, setGeneratedCredentials] = useState<{ id: string, password: string } | null>(null);
 
+  // Marking Form
+  const [selectedResult, setSelectedResult] = useState<any>(null);
+  const [markingScore, setMarkingScore] = useState(0);
+  const [markingStatus, setMarkingScoreStatus] = useState<'pending' | 'released'>('pending');
+  const [markingManualMarking, setMarkingManualMarking] = useState<Record<string, any>>({});
+  const [markingFeedback, setMarkingFeedback] = useState('');
+  const [showMarkDialog, setShowMarkDialog] = useState(false);
+
   // Assessment Form
   const [selectedCourse, setSelectedCourse] = useState('');
   const [assessmentTitle, setAssessmentTitle] = useState('');
@@ -364,6 +372,36 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
     toast.success(`Authorized for ${successCount} assignments`);
     setStudentToAssign([]);
     setCourseToAssign([]);
+  };
+
+  const handleUpdateResult = async () => {
+    if (!selectedResult) {
+      toast.error('No result selected');
+      return;
+    }
+    try {
+      const res = await fetch(`${API_URL}/api/results/${selectedResult.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          score: markingScore,
+          status: markingStatus,
+          show_score: markingStatus === 'released',
+          manual_marking: markingManualMarking,
+          feedback: markingFeedback
+        })
+      });
+      if (res.ok) {
+        fetchData();
+        setShowMarkDialog(false);
+        toast.success('Result Updated Successfully');
+      } else {
+        const errorData = await res.json();
+        toast.error(`Update failed: ${errorData.message || res.statusText}`);
+      }
+    } catch (e: any) {
+      toast.error('Network error occurred');
+    }
   };
 
   // Material Upload
@@ -847,14 +885,35 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
                 <Button onClick={() => toast.info('Advanced filtering coming soon')} variant="outline" className="rounded-2xl border-neon-border bg-black/40 text-gray-400 hover:text-neon-cyan hover:border-neon-cyan transition-all uppercase text-[10px] font-black h-12 px-8 tracking-widest italic shadow-lg"><Filter className="w-4 h-4 mr-3 text-neon-cyan/50" /> FILTER ENGINE</Button>
               </div>
               <Table>
-                <TableHeader className="bg-black/40 border-b border-neon-border/50"><TableRow className="hover:bg-transparent"><TableHead className="px-8 py-6 text-neon-cyan uppercase text-[10px] font-black tracking-widest">Student Identity</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black tracking-widest">Assessment</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black tracking-widest">Outcome</TableHead><TableHead className="text-right px-8 text-neon-cyan uppercase text-[10px] font-black tracking-widest">Status</TableHead></TableRow></TableHeader>
+                <TableHeader className="bg-black/40 border-b border-neon-border/50"><TableRow className="hover:bg-transparent"><TableHead className="px-8 py-6 text-neon-cyan uppercase text-[10px] font-black tracking-widest">Student Identity</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black tracking-widest">Assessment</TableHead><TableHead className="text-neon-cyan uppercase text-[10px] text-center font-black tracking-widest">Outcome</TableHead><TableHead className="text-right px-8 text-neon-cyan uppercase text-[10px] font-black tracking-widest">Action</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {results.filter(r => myStudents.some(s => s.id === r.student_id)).map(r => (
+                  {results.filter(r => myStudents.some(s => s.id === r.student_id)).sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).map(r => (
                     <TableRow key={r.id} className="border-b border-neon-border/20 hover:bg-neon-cyan/5 transition-colors">
                       <TableCell className="px-8 py-8"><div className="flex items-center gap-5"><Avatar className="w-12 h-12 border border-neon-cyan/30 shadow-lg ring-2 ring-black"><AvatarFallback className="bg-neon-card text-neon-cyan uppercase text-xs font-black italic">{r.student_name?.[0] || 'S'}</AvatarFallback></Avatar><div><p className="text-white text-base tracking-tight font-black italic uppercase leading-tight">{r.student_name}</p><p className="text-[10px] text-gray-500 tracking-[0.2em] font-black uppercase mt-1">{r.student_id}</p></div></div></TableCell>
-                      <TableCell className="text-center text-gray-300 uppercase text-[10px] tracking-widest font-black italic">{r.assessment_title}</TableCell>
-                      <TableCell className="text-center"><span className={cn("text-2xl font-black tracking-tighter italic", r.score >= 50 ? 'text-neon-cyan' : 'text-neon-pink')}>{r.score}%</span></TableCell>
-                      <TableCell className="text-right px-8"><Badge className={cn("px-5 py-2 rounded-full text-[9px] uppercase tracking-widest font-black border italic", r.status === 'released' ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30 shadow-[0_0_10px_rgba(0,242,255,0.1)]' : 'bg-neon-yellow/10 text-neon-yellow border-neon-yellow/30 shadow-[0_0_10px_rgba(255,242,0,0.1)]')}>{r.status}</Badge></TableCell>
+                      <TableCell className="text-center">
+                        <p className="text-white text-sm font-black uppercase italic tracking-tighter leading-none mb-1">{r.assessment_title}</p>
+                        <p className="text-[9px] text-neon-cyan/60 font-black uppercase tracking-widest">{results.filter(res => res.assessment_id === r.assessment_id).length} Submissions</p>
+                      </TableCell>
+                      <TableCell className="text-center">
+                        <span className={cn("text-2xl font-black tracking-tighter italic block mb-1", r.score >= 50 ? 'text-neon-cyan' : 'text-neon-pink')}>{r.score}%</span>
+                        <Badge className={cn("px-4 py-1 rounded-full text-[8px] uppercase tracking-widest font-black border italic", r.status === 'released' ? 'bg-neon-cyan/10 text-neon-cyan border-neon-cyan/30 shadow-[0_0_10px_rgba(0,242,255,0.1)]' : 'bg-neon-yellow/10 text-neon-yellow border-neon-yellow/30 shadow-[0_0_10px_rgba(255,242,0,0.1)]')}>{r.status}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right px-8"><Button onClick={async () => {
+    try {
+      const res = await fetch(`${API_URL}/api/results/${r.id}`);
+      if (res.ok) {
+        const liveResult = await res.json();
+        setSelectedResult(liveResult);
+        setMarkingScore(liveResult.score);
+        setMarkingScoreStatus(liveResult.status === 'released' ? 'released' : 'pending');
+        setMarkingManualMarking(liveResult.manual_marking || {});
+        setMarkingFeedback(liveResult.feedback || '');
+        setShowMarkDialog(true);
+      } else {
+        toast.error('Failed to fetch latest result data');
+      }
+    } catch(e) { toast.error('Error fetching live data'); }
+  }} className="bg-neon-cyan text-black hover:shadow-lg px-8 rounded-2xl h-12 shadow-xl uppercase text-[10px] font-black tracking-widest transition-all italic hover:scale-105">REVIEW</Button></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -935,6 +994,239 @@ export function SubAdminDashboard({ user, onLogout, onSwitchToStudent }: SubAdmi
             {uploadMethod === 'file' ? <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-500 font-black tracking-widest ml-1">Binary File</Label><Input type="file" onChange={e => setAdminNewMaterialFile(e.target.files?.[0] || null)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-gray-400 file:bg-neon-cyan file:text-black file:border-none file:h-full file:px-6 file:mr-4 file:font-black file:uppercase file:text-[9px] cursor-pointer" /></div> : <div className="space-y-2"><Label className="text-[10px] uppercase text-gray-400 font-black tracking-widest ml-1">Asset URL</Label><Input value={adminNewMaterialLink} onChange={e => setAdminNewMaterialLink(e.target.value)} className="h-14 rounded-2xl border-neon-border bg-black/40 text-white font-bold px-5" placeholder="https://..." /></div>}
           </div>
           <DialogFooter className="mt-12"><Button onClick={handleAdminUpload} className="w-full bg-neon-cyan text-black h-16 rounded-[24px] shadow-[0_0_25px_rgba(0,242,255,0.2)] uppercase tracking-[0.2em] text-[10px] transition-all font-black italic">EXECUTE DEPLOYMENT</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showMarkDialog} onOpenChange={setShowMarkDialog}>
+        <DialogContent className="rounded-[40px] w-[98vw] max-w-[1550px] p-0 border border-neon-cyan/20 bg-neon-card backdrop-blur-3xl shadow-3xl font-inter overflow-hidden h-[95vh] flex flex-col group/modal">
+          <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-neon-cyan via-neon-purple to-neon-pink z-50 text-[10px] flex items-center justify-center font-black uppercase text-black tracking-[0.3em] overflow-hidden whitespace-nowrap">
+            PREMIUM REVIEW SESSION • ENCRYPTED SYNC ACTIVE •
+          </div>
+
+          <div className="px-6 pt-7 pb-4 border-b border-neon-border/30 bg-black/40">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center text-neon-cyan shadow-inner shrink-0">
+                  <ActivityIcon className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <DialogTitle className="text-lg font-black text-white uppercase tracking-tighter italic leading-none">Review Workspace</DialogTitle>
+                  <DialogDescription className="text-[9px] text-gray-500 font-black uppercase tracking-widest mt-1 truncate">
+                    <span className="text-neon-cyan">{selectedResult?.student_name}</span>
+                    <span className="mx-2 opacity-30">•</span>
+                    {selectedResult?.assessment_title}
+                  </DialogDescription>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowMarkDialog(false)}
+                className="h-9 w-9 rounded-full bg-white/5 hover:bg-neon-pink/20 hover:text-neon-pink transition-all text-gray-500 shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <div className="mt-4 flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2 bg-black/50 border border-neon-cyan/20 rounded-2xl px-4 py-2 shadow-inner">
+                <p className="text-[8px] text-gray-500 uppercase font-black tracking-widest">Score</p>
+                <p className={cn("text-xl font-black tracking-tighter", markingScore >= 50 ? "text-neon-cyan" : "text-neon-pink")}>
+                  {markingScore}%
+                </p>
+                <div className="w-px h-4 bg-neon-border/40 mx-1" />
+                <Input
+                  type="number"
+                  value={markingScore}
+                  onChange={e => setMarkingScore(Number(e.target.value))}
+                  className="h-7 w-14 rounded-lg border-neon-border/50 bg-transparent text-xs text-center text-white font-black focus:border-neon-cyan focus:ring-0 p-1"
+                  title="Override score manually"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 bg-black/50 border border-neon-border/30 rounded-2xl px-4 py-2 text-[10px] font-black uppercase tracking-widest text-gray-400">
+                <p>Release to student</p>
+                <div className="h-6 w-11 relative inline-flex items-center rounded-full bg-black/60 border border-neon-border/50 cursor-pointer" onClick={() => setMarkingScoreStatus(markingStatus === 'released' ? 'pending' : 'released')}>
+                    <div className={cn("h-4 w-4 rounded-full transition-all", markingStatus === 'released' ? "translate-x-6 bg-neon-cyan shadow-[0_0_10px_#00f2ff]" : "translate-x-1 bg-gray-600")} />
+                </div>
+                <p className={cn("text-[9px] font-black uppercase tracking-widest", markingStatus === 'released' ? "text-neon-cyan" : "text-neon-yellow")}>
+                  {markingStatus === 'released' ? 'Released' : 'Hidden'}
+                </p>
+              </div>
+
+              <div className="flex-1" />
+
+              <Button
+                onClick={handleUpdateResult}
+                className="bg-neon-cyan text-black px-8 rounded-2xl h-10 shadow-lg uppercase text-[10px] font-black tracking-widest transition-all italic hover:scale-105 active:scale-95 border-none shrink-0"
+              >
+                COMMIT CHANGES & SYNC
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex-1 flex overflow-hidden">
+            <ScrollArea className="flex-1 p-6 md:p-8">
+              <div className="space-y-8 max-w-5xl mx-auto pb-40 md:pb-20">
+                {(() => {
+                  const asmt = assessments.find(a => a.id === selectedResult?.assessment_id);
+                  const questions = asmt?.structured_questions || [];
+                  const studentAnswers = selectedResult?.answers || {};
+
+                  return questions.map((q: any, idx: number) => {
+                    const studentAns = studentAnswers[idx.toString()] ?? studentAnswers[idx];
+                    const isManualMarked = markingManualMarking[idx.toString()] || markingManualMarking[idx];
+
+                    return (
+                      <Card key={idx} className="rounded-[32px] border border-neon-border bg-black/20 overflow-hidden group hover:border-white/10 transition-all">
+                        <div className="bg-black/40 p-4 px-6 md:px-8 border-b border-neon-border/30 flex justify-between items-center flex-wrap gap-4">
+                          <div className="flex items-center gap-4">
+                            <span className="text-[10px] font-black text-neon-cyan uppercase tracking-widest">Section {idx + 1}</span>
+                            <Badge variant="outline" className="text-[7px] font-black opacity-40">{q.type.toUpperCase()}</Badge>
+                          </div>
+
+                          <div className="flex bg-black/60 p-1 rounded-xl border border-neon-border/50">
+                            {[
+                              { label: 'Correct', icon: CheckCircle, color: 'text-emerald-400', key: 'correct' },
+                              { label: 'Partial', icon: Clock, color: 'text-blue-400', key: 'partial' },
+                              { label: 'Wrong', icon: X, color: 'text-rose-400', key: 'incorrect' }
+                            ].map(btn => (
+                              <button
+                                key={btn.key}
+                                onClick={() => setMarkingManualMarking(prev => ({ ...prev, [idx]: btn.key }))}
+                                className={cn(
+                                  "w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center transition-all",
+                                  isManualMarked === btn.key ? "bg-white/10 " + btn.color : "text-gray-600 hover:text-gray-400"
+                                )}
+                                title={btn.label}
+                              >
+                                <btn.icon className="w-3 h-3 md:w-4 md:h-4" />
+                              </button>
+                            ))}
+                            <div className="w-px h-8 md:h-10 bg-neon-border/30 mx-1" />
+                            <button
+                              onClick={() => {
+                                const newMarking = { ...markingManualMarking };
+                                delete newMarking[idx];
+                                setMarkingManualMarking(newMarking);
+                              }}
+                              className="w-8 h-8 md:w-10 md:h-10 rounded-lg flex items-center justify-center text-gray-600 hover:text-orange-400 transition-all"
+                              title="Reset Marking"
+                            >
+                              <RotateCcw className="w-3 md:w-3.5 h-3 md:h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+
+                        <CardContent className="p-6 md:p-8">
+                          <p className="text-white text-sm md:text-base font-bold italic mb-6 md:mb-8 leading-relaxed">
+                            {q.type === 'objective' ? q.objectiveText : q.text}
+                          </p>
+
+                          {q.type === 'objective' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              {q.options.map((opt: string, optIdx: number) => {
+                                const isSelected = studentAns === optIdx;
+                                const isCorrect = q.correctAnswer === optIdx;
+
+                                return (
+                                  <div
+                                    key={optIdx}
+                                    className={cn(
+                                      "p-4 rounded-2xl border-2 transition-all flex items-center gap-4",
+                                      isSelected ? "bg-white/5 border-white/20" : "bg-black/20 border-neon-border/30",
+                                      isCorrect && isSelected ? "border-emerald-500/50 bg-emerald-500/5" :
+                                        !isCorrect && isSelected ? "border-rose-500/50 bg-rose-500/5" : ""
+                                    )}
+                                  >
+                                    <div className={cn(
+                                      "w-7 h-7 md:w-8 md:h-8 rounded-xl flex items-center justify-center font-black text-[10px] md:text-xs",
+                                      isCorrect ? "bg-emerald-500 text-black" : "bg-black/60 text-gray-500"
+                                    )}>
+                                      {String.fromCharCode(65 + optIdx)}
+                                    </div>
+                                    <div className="flex-1">
+                                      <p className={cn("text-[10px] md:text-[11px] font-bold line-clamp-2", isCorrect ? "text-emerald-400" : "text-gray-400")}>{opt}</p>
+                                    </div>
+                                    {isSelected && (
+                                      <Badge className={cn("text-[6px] md:text-[7px] font-black uppercase px-2", isCorrect ? "bg-emerald-500 text-black" : "bg-rose-500 text-white")}>
+                                        {isCorrect ? 'Match' : 'Mismatch'}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="space-y-6">
+                              <div className="p-4 md:p-6 rounded-[24px] md:rounded-3xl bg-blue-500/5 border border-blue-500/20 shadow-inner">
+                                <p className="text-[8px] text-blue-400 uppercase font-black mb-2 md:mb-3 tracking-widest">Student Submission</p>
+                                <p className="text-xs md:text-sm text-gray-200 font-bold leading-relaxed italic">
+                                  {studentAns || <span className="opacity-30">No answer provided</span>}
+                                </p>
+                              </div>
+                              <div className="p-4 md:p-6 rounded-[24px] md:rounded-3xl bg-emerald-500/5 border border-emerald-500/20">
+                                <div className="flex items-center gap-2 mb-2 md:mb-3">
+                                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                                  <p className="text-[8px] text-emerald-400 uppercase font-black tracking-widest">Model Solution / Rubric</p>
+                                </div>
+                                <p className="text-[10px] md:text-xs text-gray-400 font-medium leading-relaxed italic">
+                                  {q.modelAnswer || "No rubric defined for this question."}
+                                </p>
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  });
+                })()}
+
+                <div className="mt-16 space-y-10 border-t border-neon-border/30 pt-16 pb-20 max-w-4xl mx-auto">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center text-neon-cyan">
+                        <Files className="w-4 h-4" />
+                      </div>
+                      <Label className="text-sm text-white uppercase font-black tracking-widest">Final Evaluation & Feedback</Label>
+                    </div>
+                    <Textarea
+                      value={markingFeedback}
+                      onChange={e => setMarkingFeedback(e.target.value)}
+                      className="min-h-[160px] rounded-[32px] border-neon-border bg-black/40 text-base p-8 font-bold text-gray-200 resize-none placeholder:text-gray-700 focus:border-neon-cyan shadow-inner"
+                      placeholder="Enter the final summary of performance..."
+                    />
+                  </div>
+
+                  <div className="p-8 rounded-[40px] bg-neon-cyan/5 border border-neon-cyan/20 backdrop-blur-sm relative overflow-hidden group/stats">
+                    <div className="absolute top-0 right-0 p-8 opacity-10">
+                      <CheckCircle className="w-24 h-24 text-neon-cyan" />
+                    </div>
+                    <p className="text-[10px] text-neon-cyan uppercase font-black mb-6 tracking-widest flex items-center gap-2">
+                      <ActivityIcon className="w-4 h-4" /> Performance Intelligence Summary
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                      <div className="space-y-2">
+                        <p className="text-[10px] text-gray-500 uppercase font-black">Marked Progress</p>
+                        <p className="text-3xl font-black text-white">{Object.keys(markingManualMarking).length} <span className="text-xs opacity-30">Units</span></p>
+                      </div>
+                      <div className="space-y-2">
+                        <p className="text-[10px] text-gray-500 uppercase font-black">Raw Accuracy</p>
+                        <p className="text-3xl font-black text-neon-cyan tracking-tighter">{markingScore}%</p>
+                      </div>
+                      <div className="flex items-end pb-1">
+                        <Badge className="bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 px-4 py-2 rounded-xl text-[10px] font-black uppercase italic">
+                          {markingStatus === 'released' ? 'VERIFIED' : 'PENDING REVIEW'}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </ScrollArea>
+          </div>
+
+
         </DialogContent>
       </Dialog>
     </div>

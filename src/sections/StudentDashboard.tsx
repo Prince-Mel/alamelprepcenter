@@ -431,7 +431,7 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
                   <Card className="border-none shadow-xl rounded-3xl p-4">
                     <CardHeader><CardTitle className="text-lg font-semibold flex items-center gap-2 uppercase tracking-tight"><Trophy className="text-emerald-500" /> Recent Results</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
-                      {studentResults.filter(r => r.status === 'released').length > 0 ? studentResults.filter(r => r.status === 'released').slice(0, 5).map(res => (
+                      {studentResults.filter(r => r.status === 'released').length > 0 ? studentResults.filter(r => r.status === 'released').sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 5).map(res => (
                         <div key={res.id} className="p-4 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-between group hover:bg-white hover:shadow-md transition-all cursor-pointer">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-emerald-500 shadow-sm group-hover:scale-110 transition-transform">
@@ -562,7 +562,16 @@ export function StudentDashboard({ user, onLogout, onUpdateUser }: StudentDashbo
             )}
 
             {viewMode === 'materials' && selectedCourse && (
-              <CourseMaterials course={selectedCourse} selectedMaterial={selectedMaterial} onMaterialSelect={handleMaterialSelect} onBack={() => handleViewChange('courses')} user={user} results={studentResults} assessments={assessments} />
+              <CourseMaterials
+                course={selectedCourse}
+                selectedMaterial={selectedMaterial}
+                onMaterialSelect={handleMaterialSelect}
+                onBack={() => handleViewChange('courses')}
+                onBackToGrid={() => setSelectedMaterial(null)}
+                user={user}
+                results={studentResults}
+                assessments={assessments}
+              />
             )}
 
             {viewMode === 'assessment-list' && selectedCourse && (

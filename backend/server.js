@@ -436,7 +436,13 @@ app.delete('/api/materials/:id', async (req, res) => {
 app.get('/api/assessments', async (req, res) => {
   try {
     const [rows] = await pool.execute('SELECT * FROM assessments');
-    res.json(rows);
+    // Parse JSON fields from MySQL
+    const assessments = rows.map(a => ({
+      ...a,
+      structured_questions: typeof a.structured_questions === 'string' ? JSON.parse(a.structured_questions) : a.structured_questions,
+      assigned_student_ids: typeof a.assigned_student_ids === 'string' ? JSON.parse(a.assigned_student_ids) : a.assigned_student_ids
+    }));
+    res.json(assessments);
   } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
@@ -516,7 +522,7 @@ app.post('/api/results', async (req, res) => {
   try {
     const [existing] = await pool.execute('SELECT id FROM results WHERE student_id = ? AND assessment_id = ?', [student_id || null, assessment_id || null]);
     if (existing.length > 0) {
-      await pool.execute('UPDATE results SET score=?, correct_answers=?, status=?, answers=?, student_file=?, feedback=?, manual_marking=? WHERE id=?',
+      await pool.execute('UPDATE results SET score=?, correct_answers=?, status=?, answers=?, student_file=?, feedback=?, manual_marking=?, timestamp=CURRENT_TIMESTAMP WHERE id=?',
         [score || 0, correct_answers || 0, status || 'pending', JSON.stringify(answers || {}), JSON.stringify(student_file || null), feedback || null, JSON.stringify(manual_marking || {}), existing[0].id]);
       return res.status(200).json({ message: 'Result Updated' });
     }
@@ -542,7 +548,7 @@ app.post('/api/results', async (req, res) => {
 app.put('/api/results/:id', async (req, res) => {
   const { status, score, correct_answers, feedback, manual_marking, show_score } = req.body;
   try {
-    await pool.execute('UPDATE results SET status = ?, score = ?, correct_answers = ?, feedback = ?, manual_marking = ?, show_score = ? WHERE id = ?',
+    await pool.execute('UPDATE results SET status = ?, score = ?, correct_answers = ?, feedback = ?, manual_marking = ?, show_score = ?, timestamp = CURRENT_TIMESTAMP WHERE id = ?',
       [
         status || 'pending',
         score || 0,
